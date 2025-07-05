@@ -12,7 +12,7 @@ def single_reference(data: tuple):
     :return:
     """
     identifications: dict[str, UnityResourceNode] = {}
-    head = UnityResourceNode((data[0], data[1], data[2], data[3]), file_manager, root=True)
+    head = UnityResourceNode((data[0], data[1], data[2], data[3]), file_manager, info_json_manager, root=True)
     # target_nodes[Container.containerObjectType['ViewBounds'][0]].append(head)
     if not head.init():
         CLogging.error('Please select another file as this file is ignored')
@@ -29,14 +29,14 @@ def single_reference(data: tuple):
             extends = head.walk_through()
             for attr_path, item in extends.items():
                 iden = item[0] + str(item[1])
-                i_node = identifications.get(iden)
-                if i_node is None:
-                    node_info = file_manager.get_path_info(item[0], item[1])
+                if i_node := identifications.get(iden) is None:
+                    node_info = info_json_manager.get_path_info(item[0], item[1])
                     if node_info is None:
                         ignored_node.append(iden)
                         CLogging.warn(f'Ignored node{iden}')
                         continue
-                    i_node = UnityResourceNode((item[0], item[1], node_info['type'], node_info['name']), file_manager)
+                    i_node = UnityResourceNode((item[0], item[1], node_info['type'], node_info['name']), file_manager,
+                                               info_json_manager)
                     if not i_node.init():
                         ignored_node.append(iden)
                         CLogging.info(f'Ignored node{iden}')
@@ -46,7 +46,7 @@ def single_reference(data: tuple):
                     tail = i_node
                     if cur_tail is None:
                         cur_tail = tail
-                        
+
                     end_flag = False
                 i_node.parents[attr_path] = head
                 head.children[attr_path] = i_node
@@ -105,8 +105,8 @@ def show_network_graph(nodes: list[UnityResourceNode]):
 
 
 def track_dependency(cab0, cab1, id1):
-    bundle0 = file_manager.get_bundle_name(cab0)
-    bundle1 = file_manager.get_bundle_name(cab1)
+    bundle0 = info_json_manager.get_bundle_name(cab0)
+    bundle1 = info_json_manager.get_bundle_name(cab1)
     if dependency_track[cur_student[0]].get(cab0) is None:
         dependency_track[cur_student[0]][cab0] = {}
     if id1 not in dependency_track[cur_student[0]][cab0]:
@@ -118,7 +118,9 @@ def track_dependency(cab0, cab1, id1):
 
 
 if __name__ == 'main':
-    file_manager = FileManager()
+    info_json_manager = util.InfoJsonManger()
+    info_json_manager.init()
+    file_manager = FileManager(info_json_manager)
     dependency_track = {}
     cur_student = ['1']
     dependencies_in_total = {}

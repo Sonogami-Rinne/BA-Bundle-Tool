@@ -268,7 +268,24 @@ class ExternalsRecorder(Recorder):
     """
     每个bundle或整个流程保存一次。每创建一个Node时add
     """
-    def add(self, stu_name, node_references):
-        data = super().add(stu_name)
-        for _, tu in node_references:
+
+    def __init__(self):
+        super().__init__()
+        self.info_json_file_manager:InfoJsonManger or None = None
+
+    def set_info_json_file_manager(self, obj:InfoJsonManger):
+        self.info_json_file_manager = obj
+
+    def add(self, stu_name, node):
+        data = self.batch_data.get(stu_name)
+        if data is None:
+            data = []
+            self.batch_data[stu_name] = data
+
+        for _, tu in node.references:
+            if tu[0] == node.cab:
+                continue
+            bundle_name = self.info_json_file_manager.get_bundle_name(tu[0])
+            if bundle_name not in data:
+                data.append(bundle_name)
 

@@ -79,9 +79,8 @@ class UnityResourceNode:
             return
 
         elif isinstance(obj, dict):
-            path_id = obj.get('m_PathID')
             file_id = obj.get('m_FileID')
-            if path_id:
+            if path_id := obj.get('m_PathID'):
                 if path_id != 0:
                     self.references[parent] = (
                         self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
@@ -106,12 +105,11 @@ class UnityResourceNode:
             #     logging.info(f'Ignored tuple {str(obj)}')
         else:
             if hasattr(obj, 'm_PathID'):
-                path_id = obj.m_PathID
+                # path_id = obj.m_PathID
                 file_id = obj.m_FileID
-                if path_id:
-                    if path_id != 0:
-                        self.references[parent] = (
-                            self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
+                if path_id := obj.m_PathID != 0:
+                    self.references[parent] = (
+                        self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
                 return True
             elif isinstance(obj, (int, float, bool, str)):
                 return
