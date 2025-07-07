@@ -1,4 +1,8 @@
+import io
+import logging
+import math
 import os.path
+import struct
 
 import numpy as np
 import util
@@ -8,7 +12,8 @@ from unityResourceNode import UnityResourceNode
 
 class ContainerObject:
     def __init__(self, parent_container):
-        self.data = {}
+        self.data = []
+        self.data_keys = []
         self.parent_container = parent_container
         self.nodes = {}
 
@@ -34,38 +39,68 @@ class ContainerObject:
         :return:
         """
 
+    def get_index(self, identification):
+        return self.data_keys.index(identification)
+
 
 class SpineClips(ContainerObject):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.clip_keys = []
+        self.skeleton_keys = []
+        self.data = {
+            'skeletons': [],
+            'clips': [],
+        }
 
     def process(self):
-        audio_clips = self.parent_container[Container.containerObjectType['AudioClips'][0]]
-        for name, node in self.nodes.items():
+        nodes_dict = self.parent_container.nodes_dict
+        for _, node in self.nodes.items():
             skeleton_node = node.children['skeletonDataAsset']
             skeleton_name = skeleton_node.children['skeletonJson']
-            skeleton_dict = self.data.get(skeleton_name)
-            if skeleton_dict is None:
-                skeleton_dict = {'defaultMix': skeleton_node.obj.defaultMix, 'scale': skeleton_node.obj.scale,
-                                 'clips': {}}
-                self.data[skeleton_name] = skeleton_dict
+            if skeleton_index := self.skeleton_keys.index(skeleton_name) < 0:
+                skeleton_index = len(self.skeleton_keys)
+                self.skeleton_keys.append(skeleton_name)
+                self.data['skeletons'].append({
+                    'defaultMix': skeleton_node.obj.defaultMix,
+                    'scale': skeleton_node.obj.scale
+                })
+
             node_obj = node.obj
-            skeleton_dict['clips'][name] = {
+            tmp = {
+                'skeleton': skeleton_index,
                 'clipName': node_obj.ClipName,
                 'introDelayDuration': node_obj.IntroDelayDuration,
                 'introMix': node_obj.IntroMix,
                 'outroMix': node_obj.OutroMix,
                 'outroStartOffset': node_obj.OutroStartOffset,
-                'track': node_obj.Track,
+                'track': node_obj.Track,  # Track为负数的话，播完就隐藏当前spine对象
                 'useDefaultIntroMix': node_obj.UseDefaultIntroMix == 1,
                 'useDefaultOutroMix': node_obj.UseDefaultOutroMix == 1,
                 'isTrackMainIdle': node_obj.IsTrackMainIdle,
-                'soundKeys': [{
-                    'time': i.Time,
-                    'audios': [
-                        (j.m_name, audio_clips[j.m_name]) for j in i['Event']['AudioData']['AudioClips']
-                    ]
-                } for i in node_obj.SoundKeys
-                ],
+                'syncPlays': [
+                    node.children[i].get_identification() for i in
+                    list(filter(lambda x: x.startswith('SoundKeys-'), node.children.keys()))
+                ]
             }
+            sound_keys = []
+            for i in node_obj.SoundKeys:
+                target = i.Event
+                file_id = target.m_FileID
+                identification = node.cab if file_id == 0 else node.dependencies[file_id - 1] + str(target.m_PathID)
+                target = nodes_dict[identification].obj
+                sound_keys.append({
+                    'time': i.Time,
+                    'audio': target
+                })
+            tmp['soundKeys'] = sound_keys
+            self.clip_keys.append(node.get_identification())
+            self.data['clips'].append(tmp)
+
+        for clip in self.data['clips']:
+            if length := len(clip['syncPlays']) > 0:
+                for i in range(length):
+                    clip['syncPlays'][i] = self.clip_keys.index(clip['syncPlays'][i])
 
     def test_and_add(self, node: UnityResourceNode):
         if hasattr(node.obj, 'ClipName'):
@@ -76,26 +111,29 @@ class SpineClips(ContainerObject):
 
 class InteractiveConfig(ContainerObject):
 
+    def fetch_data(self, item):
+        spine_container = self.parent_container.container_objects[Container.containerObjectType['SpineClips'][0]]
+        obj = item.obj
+        return {
+            'offset': obj.BoneCenterOffset,
+            'followDragSpeed': obj.FollowDragSpeed01,
+            'followReleaseSpeed': obj.FollowReleaseSpeed01,
+            'bounds': (obj.MinLocalPos.x, obj.MinLocalPos.y, obj.MaxLocalPos.x, obj.MaxLocalPos.y),
+            'initPos': (obj.OrigLocalPos.x, obj.OrigLocalPos.y),
+            'delay': obj.TriggerDelay,
+            # 'in': item.children['IngClip'].get_identification(),
+            # 'end': item.children['EndClip'].get_identification()
+            'in': spine_container.get_index(item.children['IngClip'].get_identification()),
+            'end': spine_container.get_index(item.children['EndClip'].get_identification())
+        }
+
     def process(self):
 
-        def fetch_data(item):
-            obj = item.obj
-            return {
-                'offset': obj.BoneCenterOffset,
-                'followDragSpeed': obj.FollowDragSpeed01,
-                'followReleaseSpeed': obj.FollowReleaseSpeed01,
-                'bounds': (obj.MinLocalPos.x, obj.MinLocalPos.y, obj.MaxLocalPos.x, obj.MaxLocalPos.y),
-                'initPos': (obj.OrigLocalPos.x, obj.OrigLocalPos.y),
-                'delay': obj.TriggerDelay,
-                'in': item.children['IngClip'].name,
-                'end': item.children['EndClip'].name
-            }
-
-        for name, node in self.nodes.items():
+        for identification, node in self.nodes.items():
             tmp = node.name.endswith('IK')
             test = (lambda item: hasattr(item.obj, 'BoneCenterOffset')) \
                 if tmp else (lambda item: item.children.get('spineCharacter') is not None)
-            fetch = fetch_data if tmp else lambda: None
+            fetch = InteractiveConfig.fetch_data if tmp else lambda x: None
             node_data = {}
             for attr_name, component_data in node.children.items():
                 if not attr_name.startswith('m_Components'):
@@ -110,17 +148,14 @@ class InteractiveConfig(ContainerObject):
                     node_data['data'] = fetch(node)
 
             node_data['transform_matrix'] = node.process_data
-
-            self.data[name] = node_data
+            self.data_keys.append(identification)
+            self.data.append(node_data)
 
     def test_and_add(self, node: UnityResourceNode):
         if node.name == 'BodyTouch' or node.name.endswith('IK') and node.type == 'MonoBehaviour':
             self.nodes[node.get_identification()] = node
             return True
         return False
-
-    # class ViewBoundsConfig(ContainerObject):
-    #     pass
 
 
 class PostProcessing(ContainerObject):
@@ -165,7 +200,7 @@ class PostProcessing(ContainerObject):
         return None
 
     def process(self):
-        for name, node in self.nodes.items():
+        for identification, node in self.nodes.items():
             data = {}
             # low
             for attr_name, component in node.children.items():
@@ -174,7 +209,8 @@ class PostProcessing(ContainerObject):
                     if return_data is not None:
                         data['attr_name'] = return_data
             if len(data) > 0:
-                self.data[name] = data
+                self.data.append(data)
+                self.data_keys.append(identification)
 
     def test_and_add(self, node: UnityResourceNode):
         if node.name.startswith('PPPV'):
@@ -192,10 +228,10 @@ class SpriteRender(ContainerObject):
         return False
 
     def process(self):
-        for name, node in self.nodes.items():
+        for identification, node in self.nodes.items():
             obj = node.obj
 
-            self.data[name] = {
+            self.data.append({
                 'sprite': node.children['m_Sprite'],
                 'color': obj.m_Color,
                 'flip': (obj.m_FilpX, obj.m_FilpY),
@@ -204,7 +240,8 @@ class SpriteRender(ContainerObject):
                 'sortingLayer': obj.m_SortingLayer,
                 'maskInteraction': obj.m_MaskInteraction,
                 'transform': node.children['m_GameObject'].process_data
-            }
+            })
+            self.data_keys.append(identification)
 
 
 class Particle(ContainerObject):
@@ -437,6 +474,8 @@ class Particle(ContainerObject):
         shape = sub_module.type
         data['shapeModule'] = {
             'shape': shape,
+            #  这些是忽略的部分
+
             # 'texture': sub_module.m_Texture,
             # 'clipChannel': sub_module.m_TextureClipChannel,
             # 'clipThreshold': sub_module.m_TextureClipThreshold,
@@ -558,7 +597,9 @@ class Particle(ContainerObject):
                     obj = _node.obj
                     break
             data['rendererModule'] = Particle.process_particle_renderer(obj)
-            self.data[parent.get_identification()] = data
+            #  self.data[parent.get_identification()] = data
+            self.data.append(data)
+            self.data_keys.append(parent.get_identification())
 
     def test_and_add(self, node: UnityResourceNode):
         if node.type == 'ParticleSystem':
@@ -570,29 +611,231 @@ class Timeline(ContainerObject):
     总的那个时间线
     """
 
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.data = {
+            'animationClip': [],
+            'soundFix': [],
+            'spineAnimation': []
+        }
+        self.nodes = []
+
+    def process_generic_bindings(self, generic_bindings, node):
+        """
+        :param generic_bindings:
+        :param node:
+        :return: list[{'node','property','isPPtrCurve','curve'}]
+        """
+        info_json_manager = self.parent_container.info_json_manager
+        game_object_dict = self.parent_container.container_objects[Container.containerObjectType['GameObject'][0]]
+        nodes_dict = self.parent_container.nodes_dict
+        dependencies = node.dependencies
+        generics = generic_bindings['genericBindings']
+        bindings = []
+        for item in generics:
+            script = item['script']
+            data = {}
+            flag = True
+            if path_id := script['m_PathID'] != 0:  # 直接根据pathID, fileID得到对应对象
+                file_id = script['m_FileID']
+                identification = node.cab if file_id == 0 else dependencies[file_id - 1] + str(path_id)
+                data['node'] = nodes_dict[identification]
+            else:
+                path = info_json_manager.get_path(item['path'])
+                path = game_object_dict[path]
+                type_name = util.InfoJsonManger.get_class_type(item['typeID'])
+                data = {}
+                for node in path.children.values():
+                    if node.type == type_name:
+                        data['node'] = node
+                        break
+            if flag:
+                util.CLogging.error('Target GameObject not found')
+                assert False
+            data['property'] = info_json_manager.get_property_name(item['attribute'])
+            data['isPPtrCurve'] = item['isPPtrCurve'] != 0
+            data['curve'] = []
+            bindings.append(data)
+        generic_bindings['genericBindings'] = bindings
+        return generic_bindings
+
+    @staticmethod
+    def parse_streamed_clip(streamed, generic_bindings):
+        """
+        从muscleClip的m_Clip里面读取数据
+        :param streamed:
+        :param generic_bindings: 从process_generic_bindings返回的数据
+        :return:
+        """
+        data_uint = streamed.get('data', [])
+        buf = struct.pack(f"<{len(data_uint)}I", *data_uint)
+        reader = io.BytesIO(buf)
+        not_first = True
+        while reader.tell() + 8 <= len(buf):
+            pos = reader.tell()
+            time = struct.unpack("<f", reader.read(4))[0]
+
+            if time == math.inf:
+                break
+
+            curve_count = struct.unpack("<H", reader.read(2))[0]
+            reader.read(2)  # padding, skip
+            if not_first:
+                for _ in range(curve_count):
+                    curve_index = struct.unpack('<H', reader.read(2))[0]
+                    reader.read(2)
+                    data = struct.unpack("<4f", reader.read(16))
+
+                    generic_bindings[curve_index].append({
+                        'time': time,
+                        'data': data
+                    })
+            else:
+                reader.read(20 * curve_count)
+                not_first = False
+
+            # keys = []
+            # for _ in range(curve_count):
+            #     curve_index = struct.unpack("<H", reader.read(2))[0]
+            #     reader.read(2)  # padding again
+            #     coeff = struct.unpack("<4f", reader.read(16))
+            #     keys.append({"index": curve_index, "coeff": coeff})
+            # frames.append({
+            #     "time": time,
+            #     "keys": keys
+            # })
+            if reader.tell() == pos:
+                break
+        # return frames
+        return generic_bindings
+
     def process(self):
-        for _, node in self.nodes:
-            pass
+        if len(self.nodes) != 1:
+            util.CLogging.error('Error for unexpected number of timeline objects')
+        node = self.nodes[0]
+        nodes_dict = self.parent_container.nodes_dict
+        for name, _node in node.children.items():
+            if _node.name.startswith('Ani'):  # Animation Track,读取直接子级的AnimationClip
+                data = {
+                    'loop': _node.obj.mInfinityClipLoop
+                }
+                animation_clip = _node.children['m_InfinityClip'].obj.read_typetree()  # 假设只有m_InfinityClip
+                # data['genericBindings'] = animation_clip['m_ClipBindingConstant']
+                generic_bindings = self.process_generic_bindings(animation_clip['m_ClipBindingConstant'], _node)
+
+                animation_clip = animation_clip['m_MuscleClip']['m_Clip']['data']
+                if len(animation_clip['m_DenseClip']['m_SampleArray']) > 0:
+                    util.CLogging.error('Error, length of m_SampleArray is not 0')
+
+                data['data'] = Timeline.parse_streamed_clip(animation_clip['m_StreamedClip'], generic_bindings)
+                self.data['animationClip'].append(data)
+
+            elif _node.name.startswith('SFX'):  # Sound Fix
+                node_obj = _node.obj
+                data = self.data['soundFix']
+                for clip in node_obj.m_Clips:
+                    clip_data = {
+                        'clipIn': clip.m_ClipIn,
+                        'duration': clip.m_Duration,
+                        # 'easeInDuration': node_obj.m_EaseInDuration,  # 这两个忽略算了
+                        # 'easeOutDuration': node_obj.m_EaseOutDuration,
+                        'start': clip.m_Start,
+                    }
+                    target = clip.m_Asset.read()
+                    audio_data = target.AudioData
+                    externals = target.assets_file.externals
+                    clip_data['volume'] = audio_data.Volume
+                    clip_data['delay'] = audio_data.Delay  # emm, start和delay这两个……
+
+                    audios = []
+                    for audio in audio_data.AudioClips:
+                        file_id = audio.m_FileID
+                        identification = _node.cab if file_id == 0 else \
+                            externals[file_id - 1].name + str(audio.m_PathID)
+                        audios.append(nodes_dict[identification].obj)
+
+                    clip_data['audios'] = audios
+
+                    data.append(clip_data)
+
+            elif _node.name.startswith('Spine'):
+                data = self.data['spineAnimation']
+                spine_container = self.parent_container.container_objects[
+                    Container.containerObjectType['SpineClips'][0]]
+                node_obj = _node.obj
+                for clip in node_obj.m_Clips:
+                    clip_data = {
+                        'clipIn': clip.m_ClipIn,
+                        'duration': clip.m_Duration,
+                        # 'easeInDuration': node_obj.m_EaseInDuration,  # 这两个忽略算了
+                        # 'easeOutDuration': node_obj.m_EaseOutDuration,
+                        'start': clip.m_Start,
+                    }
+                    target = clip.m_Asset
+                    file_id = target.m_FileID
+                    identification = _node.cab if file_id == 0 else _node.dependencies[file_id - 1] \
+                                                                    + str(target.m_PathID)
+                    target = nodes_dict[identification]
+                    target_obj = target.obj.template
+                    clip_data['ifCustomDuration'] = target_obj.customDuration == 1
+                    #  忽略了一堆参数，如attachmentThreshold, dontEndWithClip, endMixOutDuration, holdPrevious.暂不清楚这些参数的作用
+
+                    target_obj = target_obj.animationReference
+                    file_id = target_obj.m_FileID
+                    identification = target.cab if file_id == 0 else target.dependencies[file_id - 1] \
+                                                                     + str(target_obj.m_PathID)
+                    target = nodes_dict[identification]
+                    clip_data['animation'] = spine_container.get_index(target.get_identification())
+
+                    data.append(clip_data)
 
     def test_and_add(self, node: UnityResourceNode):
         if node.name.endswith('_TimeLine'):
-            pass
+            self.nodes.append(node)
+            return True
+        return False
+
+
+class AmbientEvent(ContainerObject):
+
+    def process(self):
+        for _, node in self.nodes:
+            target_node = node.children['ambientEvent']
+            target_obj = target_node.obj
+            self.data.append({
+                'crossFadeDuration': target_obj.CrossFadeDuration,  # 目前还不知道这个的具体应用
+                'loop': target_obj.Loop == 1,
+                'volume': target_obj.Volume,
+                'audio': target_node.children['Clip'].obj
+            })
+
+    def test_and_add(self, node: UnityResourceNode):
+        if hasattr(node.obj, 'ambientEvent'):
+            self.nodes[node.get_identification()] = node
+            return True
+        return False
 
 
 class Container:
     containerObjectType = {
-        # 'AudioClips': (0, AudioClips),
-        # 'Sprites': (1,),
+        # 'AudioClip': (0, AudioClip),
+        # # 'Sprite': (1, Sprite),
+        # 'GameObject': (1, GameObject),
         'SpineClips': (0, SpineClips),
         'InteractiveConfig': (1, InteractiveConfig),
         # 'ViewBoundsConfig': (3, ViewBoundsConfig),
         'PostProcessing': (2, PostProcessing),
         'SpriteRender': (3, SpriteRender),
         'Particle': (4, Particle),
-        'Timeline': (5, Timeline)
+        'Timeline': (5, Timeline),
+        'AmbientEvent': (6, AmbientEvent)
     }
 
-    def __init__(self, student_name):
+    def __init__(self, student_name, info_json_manager: util.InfoJsonManger, nodes_dict: list[UnityResourceNode]):
         self.name = student_name
-        self.container_objects = (SpineClips(self), InteractiveConfig(self),
-                                  PostProcessing(self), SpriteRender(self), Particle(self), Timeline(self))
+        self.container_objects = (
+            SpineClips(self), InteractiveConfig(self),
+            PostProcessing(self), SpriteRender(self),
+            Particle(self), Timeline(self), AmbientEvent(self))
+        self.info_json_manager: util.InfoJsonManger = info_json_manager
+        self.nodes_dict = nodes_dict

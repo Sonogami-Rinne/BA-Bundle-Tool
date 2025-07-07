@@ -27,6 +27,9 @@ class UnityResourceNode:
         self.hash_reference = {}
         self.dependencies = None
 
+    def __str__(self):
+        return self.get_identification()
+
     def init(self):
         if self.type in util.IGNORED_RESOURCE_CLASS:
             return False

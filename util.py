@@ -4,6 +4,7 @@ import zlib
 
 import numpy as np
 from scipy.spatial.transform import Rotation
+from typeId import inverse_map
 
 IGNORED_ATTR = ['object_reader', 'assetsfile', '__node__', 'assets_file']
 """
@@ -40,6 +41,8 @@ HASH_INFO_PATH = ""
 """
 记录hash信息的文件的路径
 """
+
+MAX_INFO_STR_LENGTH = 256
 
 
 def env_load(env):
@@ -82,16 +85,22 @@ def get_data_from_obj(obj) -> str:
     :return:
     """
     result = ''
-    for attr_name in dir(obj):
-        attr_value = getattr(obj, attr_name)
-        if attr_name.startswith("_") or inspect.isroutine(attr_value) or type(attr_value).__name__ in (
-                "PPtr", "SerializedFile", "ObjectReader"):
-            continue
-        if isinstance(attr_value, list) and len(attr_value) > 0 and type(attr_value[0]).__name__ in (
-                "PPtr", "SerializedFile", "ObjectReader"):
-            continue
-        result += f'{attr_name}: {attr_value}\n'
+    for attr_name, attr_value in obj.read_typetree():
+        data = str(attr_value)
+        if len(data) > MAX_INFO_STR_LENGTH:
+            data = 'Too long to display'
+        result += f'{attr_name}: {data}\n'
     return result
+    # for attr_name in dir(obj):
+    #     attr_value = getattr(obj, attr_name)
+    #     if attr_name.startswith("_") or inspect.isroutine(attr_value) or type(attr_value).__name__ in (
+    #             "PPtr", "SerializedFile", "ObjectReader"):
+    #         continue
+    #     if isinstance(attr_value, list) and len(attr_value) > 0 and type(attr_value[0]).__name__ in (
+    #             "PPtr", "SerializedFile", "ObjectReader"):
+    #         continue
+    #     result += f'{attr_name}: {attr_value}\n'
+    # return result
 
 
 def compute_unity_hash(s: str) -> int:
@@ -169,7 +178,8 @@ class InfoJsonManger:
     def __init__(self):
         self.cab2bundle_json = {}
         self.cab_path_json = {}
-        self.hash_info_json = {}
+        self.property_hash = {}
+        self.path_hash = {}
 
     def init(self, using_file_info=True, using_hash_info=True):
         if using_file_info:
@@ -181,7 +191,7 @@ class InfoJsonManger:
                         self.cab_path_json[cab_name] = cab_data
         if using_hash_info:
             with open(HASH_INFO_PATH, 'r', encoding='utf-8') as f:
-                self.hash_info_json = json.load(f)
+                self.property_hash = json.load(f)
 
     def get_path_info(self, cab_name, path_id) -> dict or None:
         if not cab_name.startswith('c'):  # unity default resources
@@ -199,6 +209,29 @@ class InfoJsonManger:
         if self.cab2bundle_json.get(cab_name) is None:
             return None
         return self.cab2bundle_json[cab_name]
+
+    def add_property_hash(self, property_name):
+        if property_name not in self.property_hash.values():
+            self.property_hash[compute_unity_hash(property_name)] = property_name
+
+    def add_path_hash(self, path):
+        if path not in self.path_hash.values():
+            self.path_hash[compute_unity_hash(path)] = path
+
+    def get_property_name(self, property_hash):
+        return self.property_hash.get(property_hash)
+
+    def get_path(self, path_hash):
+        """
+        根据path_hash返回GameObject的path(不是pathID)
+        :param path_hash:
+        :return:
+        """
+        return self.path_hash.get(path_hash)
+
+    @staticmethod
+    def get_class_type(type_id):
+        return inverse_map[str(type_id)]
 
 
 class Recorder:
@@ -251,7 +284,7 @@ class TrackInfoRecorder(Recorder):
 
 class HashInfoRecorder(Recorder):
     """
-    新节点创建后调用。不可分批保存，以避免重复
+    新节点创建后调用。不可分批保存，以避免重复.考虑运行时动态获得hash,那么这个就可以废弃了
     """
 
     def add(self, node_obj):
@@ -271,9 +304,9 @@ class ExternalsRecorder(Recorder):
 
     def __init__(self):
         super().__init__()
-        self.info_json_file_manager:InfoJsonManger or None = None
+        self.info_json_file_manager: InfoJsonManger or None = None
 
-    def set_info_json_file_manager(self, obj:InfoJsonManger):
+    def set_info_json_file_manager(self, obj: InfoJsonManger):
         self.info_json_file_manager = obj
 
     def add(self, stu_name, node):
@@ -288,4 +321,3 @@ class ExternalsRecorder(Recorder):
             bundle_name = self.info_json_file_manager.get_bundle_name(tu[0])
             if bundle_name not in data:
                 data.append(bundle_name)
-
