@@ -15,15 +15,15 @@ class FileManager:
         if self.info_json_manager.get_path_info(cab_name, path_id) is None:
             return None
         bundle_name = self.info_json_manager.get_bundle_name(cab_name)
-        if bundle_data := self.buffer.get(bundle_name) is None:
-            env = UnityPy.load(os.path.join(util.BUNDLES_PATH, bundle_name, '.bundle'))
+        if (bundle_data := self.buffer.get(bundle_name)) is None:
+            env = UnityPy.load(os.path.join(util.BUNDLES_PATH, bundle_name + '.bundle'))
             objects = self.__add_buffer__(env, bundle_name)
             return objects[cab_name]['data'][path_id]['obj']
         else:
             return bundle_data[cab_name]['data'][path_id]['obj']
 
-    def get_bundle_(self, bundle_name):
-        if bundle_data := self.buffer.get(bundle_name) is None:
+    def get_bundle(self, bundle_name):
+        if (bundle_data := self.buffer.get(bundle_name)) is None:
             env = UnityPy.load(os.path.join(util.BUNDLES_PATH, bundle_name))
             objects = self.__add_buffer__(env, bundle_name)
             return objects

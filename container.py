@@ -7,7 +7,8 @@ import struct
 import numpy as np
 import util
 
-from unityResourceNode import UnityResourceNode
+
+# from unityResourceNode import UnityResourceNode
 
 
 class ContainerObject:
@@ -24,7 +25,7 @@ class ContainerObject:
         """
         pass
 
-    def test_and_add(self, node: UnityResourceNode):
+    def test_and_add(self, node):
         """
         检测node是否命中，并在命中时存入
         :param node:
@@ -43,6 +44,24 @@ class ContainerObject:
         return self.data_keys.index(identification)
 
 
+class GameObject(ContainerObject):
+    """
+    仅用于hash的，不存储
+    """
+
+    def test_and_add(self, node):
+        if node.type == 'GameObject':
+            self.nodes[util.compute_unity_hash(node.hierarchy_path)] = node
+            return True
+        return False
+
+    def save_data(self, folder):
+        pass
+
+    def get_path(self, path_hash):
+        return self.nodes[path_hash]
+
+
 class SpineClips(ContainerObject):
     def __init__(self, parent):
         super().__init__(parent)
@@ -57,14 +76,17 @@ class SpineClips(ContainerObject):
         nodes_dict = self.parent_container.nodes_dict
         for _, node in self.nodes.items():
             skeleton_node = node.children['skeletonDataAsset']
-            skeleton_name = skeleton_node.children['skeletonJson']
-            if skeleton_index := self.skeleton_keys.index(skeleton_name) < 0:
+            skeleton_name = skeleton_node.children['skeletonJSON'].name
+            # if (skeleton_index := self.skeleton_keys.index(skeleton_name)) < 0:
+            if skeleton_name not in self.skeleton_keys:
                 skeleton_index = len(self.skeleton_keys)
                 self.skeleton_keys.append(skeleton_name)
                 self.data['skeletons'].append({
                     'defaultMix': skeleton_node.obj.defaultMix,
                     'scale': skeleton_node.obj.scale
                 })
+            else:
+                skeleton_index = self.skeleton_keys.index(skeleton_name)
 
             node_obj = node.obj
             tmp = {
@@ -80,14 +102,14 @@ class SpineClips(ContainerObject):
                 'isTrackMainIdle': node_obj.IsTrackMainIdle,
                 'syncPlays': [
                     node.children[i].get_identification() for i in
-                    list(filter(lambda x: x.startswith('SoundKeys-'), node.children.keys()))
+                    list(filter(lambda x: x.startswith('Sync'), node.children.keys()))
                 ]
             }
             sound_keys = []
             for i in node_obj.SoundKeys:
                 target = i.Event
                 file_id = target.m_FileID
-                identification = node.cab if file_id == 0 else node.dependencies[file_id - 1] + str(target.m_PathID)
+                identification = (node.cab if file_id == 0 else node.dependencies[file_id - 1]) + str(target.m_PathID)
                 target = nodes_dict[identification].obj
                 sound_keys.append({
                     'time': i.Time,
@@ -98,15 +120,18 @@ class SpineClips(ContainerObject):
             self.data['clips'].append(tmp)
 
         for clip in self.data['clips']:
-            if length := len(clip['syncPlays']) > 0:
+            if (length := len(clip['syncPlays'])) > 0:
                 for i in range(length):
                     clip['syncPlays'][i] = self.clip_keys.index(clip['syncPlays'][i])
 
-    def test_and_add(self, node: UnityResourceNode):
+    def test_and_add(self, node):
         if hasattr(node.obj, 'ClipName'):
             self.nodes[node.get_identification()] = node
             return True
         return False
+
+    def get_index(self, identification):
+        return self.clip_keys.index(identification)
 
 
 class InteractiveConfig(ContainerObject):
@@ -147,12 +172,12 @@ class InteractiveConfig(ContainerObject):
                 elif test(node):
                     node_data['data'] = fetch(node)
 
-            node_data['transform_matrix'] = node.process_data
+            node_data['transform_matrix'] = util.get_transform(node)
             self.data_keys.append(identification)
             self.data.append(node_data)
 
-    def test_and_add(self, node: UnityResourceNode):
-        if node.name == 'BodyTouch' or node.name.endswith('IK') and node.type == 'MonoBehaviour':
+    def test_and_add(self, node):
+        if node.name == 'BodyTouch' or (node.name.endswith('IK') and node.type == 'GameObject'):
             self.nodes[node.get_identification()] = node
             return True
         return False
@@ -212,7 +237,7 @@ class PostProcessing(ContainerObject):
                 self.data.append(data)
                 self.data_keys.append(identification)
 
-    def test_and_add(self, node: UnityResourceNode):
+    def test_and_add(self, node):
         if node.name.startswith('PPPV'):
             self.nodes[node.get_identification()] = node
             return True
@@ -221,7 +246,7 @@ class PostProcessing(ContainerObject):
 
 class SpriteRender(ContainerObject):
 
-    def test_and_add(self, node: UnityResourceNode):
+    def test_and_add(self, node):
         if node.type == 'SpriteRenderer':
             self.nodes[node.get_identification()] = node
             return True
@@ -234,12 +259,12 @@ class SpriteRender(ContainerObject):
             self.data.append({
                 'sprite': node.children['m_Sprite'],
                 'color': obj.m_Color,
-                'flip': (obj.m_FilpX, obj.m_FilpY),
+                'flip': (obj.m_FlipX, obj.m_FlipY),
                 'material': obj.m_Materials,
                 'drawMode': obj.m_DrawMode,
                 'sortingLayer': obj.m_SortingLayer,
                 'maskInteraction': obj.m_MaskInteraction,
-                'transform': node.children['m_GameObject'].process_data
+                'transform': util.get_transform(node.children['m_GameObject'])
             })
             self.data_keys.append(identification)
 
@@ -320,7 +345,7 @@ class Particle(ContainerObject):
             'maxColor': util.to_tuple(obj.maxColor),
             'minColor': util.to_tuple(obj.minColor),
             'maxGradient': Particle.process_gradient(obj.maxGradient),
-            'minGradient': Particle.process_gradient(obj.mixGradient)
+            'minGradient': Particle.process_gradient(obj.minGradient)
         }
 
     @staticmethod
@@ -334,7 +359,7 @@ class Particle(ContainerObject):
                 'outWeight': i.outWeight,
                 'time': i.time,
                 'value': i.value,
-                'weightMode': i.weightMode
+                'weightMode': i.weightedMode
             } for i in target
         ]
 
@@ -344,15 +369,15 @@ class Particle(ContainerObject):
             'maxCurve': Particle.process_animation_curve(obj.maxCurve),
             'minCurve': Particle.process_animation_curve(obj.minCurve),
             'minMaxState': obj.minMaxState,
-            'minScaler': obj.minScaler,
-            'scaler': obj.scaler
+            'minScaler': obj.minScalar,
+            'scaler': obj.scalar
         }
 
     @staticmethod
     def process_particle_system(obj):
         data = {}
         #  忽略的模块
-        for module_name in ('CollisionModule', 'CustomDataModule', 'ExternalForceModule', 'ForceModule',
+        for module_name in ('CollisionModule', 'CustomDataModule', 'ExternalForcesModule', 'ForceModule',
                             'InheritVelocityModule', 'LightsModule', 'SubModule', 'TrailModule', 'TriggerModule',
                             'UVModule'):
             sub_module = getattr(obj, module_name)
@@ -370,13 +395,13 @@ class Particle(ContainerObject):
         #  颜色模块
         sub_module = obj.ColorModule
         if sub_module.enabled:
-            data['colorModule'] = Particle.process_gradient(sub_module.gradient)
+            data['colorModule'] = Particle.process_min_max_gradient(sub_module.gradient)
 
         #  发射器模块
         sub_module = obj.EmissionModule
         data['emissionModule'] = {
-            'rateOverDistance': Particle.process_min_max_curve(obj.rateOverDistance),  # 每个移动单位发射的粒子数量
-            'rateOverTime': Particle.process_min_max_curve(obj.rateOverTime),  # 每个时间单位发射的粒子数量
+            'rateOverDistance': Particle.process_min_max_curve(sub_module.rateOverDistance),  # 每个移动单位发射的粒子数量
+            'rateOverTime': Particle.process_min_max_curve(sub_module.rateOverTime),  # 每个时间单位发射的粒子数量
             'bursts': [
                 {
                     'count': Particle.process_min_max_curve(i.countCurve),  # 不知道那个maxCount和minCount是否为unitypy自动生成的
@@ -401,7 +426,7 @@ class Particle(ContainerObject):
             'startRotation': Particle.process_min_max_curve(sub_module.startRotation),
             'size3D': sub_module.size3D,
             'startSizeY': Particle.process_min_max_curve(sub_module.startSizeY),
-            'startSizeZ': Particle.process_min_max_curve(sub_module.startSize.Z),
+            'startSizeZ': Particle.process_min_max_curve(sub_module.startSizeZ),
             'startSize': Particle.process_min_max_curve(sub_module.startSize),
             'startSpeed': Particle.process_min_max_curve(sub_module.startSize),
             'duration': obj.lengthInSec,  # 粒子系统的时长。不知道为什么，这个东西放在粒子系统的根部分，而不是模块内
@@ -416,9 +441,9 @@ class Particle(ContainerObject):
         }
 
         #  生命随速度变换模块
-        sub_module = obj.LifeTimeByEmitterSpeedModule
+        sub_module = obj.LifetimeByEmitterSpeedModule
         if sub_module.enabled:
-            data['lifeTimeByEmitterSpeedModule'] = {
+            data['lifetimeByEmitterSpeedModule'] = {
                 'curve': Particle.process_min_max_curve(sub_module.m_Curve),
                 'range': util.to_tuple(sub_module.m_Range)
             }
@@ -531,7 +556,7 @@ class Particle(ContainerObject):
             data['sizeModule'] = {
                 'curve': Particle.process_min_max_curve(sub_module.curve),
                 'separateAxes': sub_module.separateAxes,
-                'curveY': Particle.process_min_max_curve(sub_module.Y),
+                'curveY': Particle.process_min_max_curve(sub_module.y),
                 'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
@@ -587,13 +612,13 @@ class Particle(ContainerObject):
         }
 
     def process(self):
-        for _, node in self.nodes:
+        for _, node in self.nodes.items():
             #  先是ParticleSystem
             obj = node.obj
             data = Particle.process_particle_system(obj)
             parent = node.children['m_GameObject']
-            for _, _node in parent.children:
-                if _node.type == 'ParticleRenderer':
+            for _, _node in parent.children.items():
+                if _node.type == 'ParticleSystemRenderer':
                     obj = _node.obj
                     break
             data['rendererModule'] = Particle.process_particle_renderer(obj)
@@ -601,7 +626,7 @@ class Particle(ContainerObject):
             self.data.append(data)
             self.data_keys.append(parent.get_identification())
 
-    def test_and_add(self, node: UnityResourceNode):
+    def test_and_add(self, node):
         if node.type == 'ParticleSystem':
             self.nodes[node.get_identification()] = node
 
@@ -620,8 +645,9 @@ class Timeline(ContainerObject):
         }
         self.nodes = []
 
-    def process_generic_bindings(self, generic_bindings, node):
+    def process_generic_bindings(self, generic_bindings, node, game_object_container):
         """
+        :param game_object_container:
         :param generic_bindings:
         :param node:
         :return: list[{'node','property','isPPtrCurve','curve'}]
@@ -630,34 +656,39 @@ class Timeline(ContainerObject):
         game_object_dict = self.parent_container.container_objects[Container.containerObjectType['GameObject'][0]]
         nodes_dict = self.parent_container.nodes_dict
         dependencies = node.dependencies
-        generics = generic_bindings['genericBindings']
+        generics = generic_bindings.genericBindings
         bindings = []
         for item in generics:
-            script = item['script']
+            script = item.script
             data = {}
-            flag = True
-            if path_id := script['m_PathID'] != 0:  # 直接根据pathID, fileID得到对应对象
-                file_id = script['m_FileID']
-                identification = node.cab if file_id == 0 else dependencies[file_id - 1] + str(path_id)
+
+            type_name = util.InfoJsonManger.get_class_type(item.typeID)
+            if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象
+                file_id = script.m_FileID
+                identification = (node.cab if file_id == 0 else dependencies[file_id - 1]) + str(path_id)
                 data['node'] = nodes_dict[identification]
             else:
-                path = info_json_manager.get_path(item['path'])
-                path = game_object_dict[path]
-                type_name = util.InfoJsonManger.get_class_type(item['typeID'])
+                #  path = info_json_manager.get_path(item['path'])
+
+                #  path = game_object_container.get_path(item.path)
+                path = game_object_dict.get_path(item.path)
                 data = {}
                 for node in path.children.values():
                     if node.type == type_name:
                         data['node'] = node
                         break
-            if flag:
-                util.CLogging.error('Target GameObject not found')
-                assert False
-            data['property'] = info_json_manager.get_property_name(item['attribute'])
-            data['isPPtrCurve'] = item['isPPtrCurve'] != 0
+
+            if (tmp := info_json_manager.get_property_name(type_name, item.attribute)) is None:
+                util.CLogging.error(f'Unknown property hash{item.attribute}, {type_name}')
+            data['property'] = tmp
+            data['isPPtrCurve'] = item.isPPtrCurve != 0
             data['curve'] = []
             bindings.append(data)
-        generic_bindings['genericBindings'] = bindings
-        return generic_bindings
+        # generic_bindings['genericBindings'] = bindings
+        return {
+            'pptrCurveMapping': generic_bindings.pptrCurveMapping,
+            'genericBindings': bindings
+        }
 
     @staticmethod
     def parse_streamed_clip(streamed, generic_bindings):
@@ -667,15 +698,16 @@ class Timeline(ContainerObject):
         :param generic_bindings: 从process_generic_bindings返回的数据
         :return:
         """
-        data_uint = streamed.get('data', [])
+        data_uint = streamed.data
         buf = struct.pack(f"<{len(data_uint)}I", *data_uint)
         reader = io.BytesIO(buf)
-        not_first = True
+        not_first = False
+        generic_bindings = generic_bindings['genericBindings']
         while reader.tell() + 8 <= len(buf):
             pos = reader.tell()
             time = struct.unpack("<f", reader.read(4))[0]
 
-            if time == math.inf:
+            if time == math.inf:  # 跳过最后一帧
                 break
 
             curve_count = struct.unpack("<H", reader.read(2))[0]
@@ -686,24 +718,14 @@ class Timeline(ContainerObject):
                     reader.read(2)
                     data = struct.unpack("<4f", reader.read(16))
 
-                    generic_bindings[curve_index].append({
+                    generic_bindings[curve_index]['curve'].append({
                         'time': time,
                         'data': data
                     })
-            else:
+            else:  # 跳过第一帧
                 reader.read(20 * curve_count)
-                not_first = False
+                not_first = True
 
-            # keys = []
-            # for _ in range(curve_count):
-            #     curve_index = struct.unpack("<H", reader.read(2))[0]
-            #     reader.read(2)  # padding again
-            #     coeff = struct.unpack("<4f", reader.read(16))
-            #     keys.append({"index": curve_index, "coeff": coeff})
-            # frames.append({
-            #     "time": time,
-            #     "keys": keys
-            # })
             if reader.tell() == pos:
                 break
         # return frames
@@ -714,20 +736,21 @@ class Timeline(ContainerObject):
             util.CLogging.error('Error for unexpected number of timeline objects')
         node = self.nodes[0]
         nodes_dict = self.parent_container.nodes_dict
+        game_object_container = self.parent_container.container_objects[Container.containerObjectType['GameObject'][0]]
         for name, _node in node.children.items():
             if _node.name.startswith('Ani'):  # Animation Track,读取直接子级的AnimationClip
                 data = {
-                    'loop': _node.obj.mInfinityClipLoop
+                    'loop': _node.obj.mInfiniteClipLoop
                 }
-                animation_clip = _node.children['m_InfinityClip'].obj.read_typetree()  # 假设只有m_InfinityClip
+                animation_clip = _node.children['m_InfiniteClip'].obj  # .obj.read_typetree()  # 假设只有m_InfinityClip
                 # data['genericBindings'] = animation_clip['m_ClipBindingConstant']
-                generic_bindings = self.process_generic_bindings(animation_clip['m_ClipBindingConstant'], _node)
+                generic_bindings = self.process_generic_bindings(animation_clip.m_ClipBindingConstant, _node, game_object_container)
 
-                animation_clip = animation_clip['m_MuscleClip']['m_Clip']['data']
-                if len(animation_clip['m_DenseClip']['m_SampleArray']) > 0:
+                animation_clip = animation_clip.m_MuscleClip.m_Clip.data
+                if len(animation_clip.m_DenseClip.m_SampleArray) > 0:
                     util.CLogging.error('Error, length of m_SampleArray is not 0')
 
-                data['data'] = Timeline.parse_streamed_clip(animation_clip['m_StreamedClip'], generic_bindings)
+                data['data'] = Timeline.parse_streamed_clip(animation_clip.m_StreamedClip, generic_bindings)
                 self.data['animationClip'].append(data)
 
             elif _node.name.startswith('SFX'):  # Sound Fix
@@ -750,8 +773,8 @@ class Timeline(ContainerObject):
                     audios = []
                     for audio in audio_data.AudioClips:
                         file_id = audio.m_FileID
-                        identification = _node.cab if file_id == 0 else \
-                            externals[file_id - 1].name + str(audio.m_PathID)
+                        identification = (_node.cab if file_id == 0 else
+                                          externals[file_id - 1].name.lower()) + str(audio.m_PathID)
                         audios.append(nodes_dict[identification].obj)
 
                     clip_data['audios'] = audios
@@ -773,8 +796,7 @@ class Timeline(ContainerObject):
                     }
                     target = clip.m_Asset
                     file_id = target.m_FileID
-                    identification = _node.cab if file_id == 0 else _node.dependencies[file_id - 1] \
-                                                                    + str(target.m_PathID)
+                    identification = (_node.cab if file_id == 0 else _node.dependencies[file_id - 1]) + str(target.m_PathID)
                     target = nodes_dict[identification]
                     target_obj = target.obj.template
                     clip_data['ifCustomDuration'] = target_obj.customDuration == 1
@@ -782,15 +804,14 @@ class Timeline(ContainerObject):
 
                     target_obj = target_obj.animationReference
                     file_id = target_obj.m_FileID
-                    identification = target.cab if file_id == 0 else target.dependencies[file_id - 1] \
-                                                                     + str(target_obj.m_PathID)
+                    identification = (target.cab if file_id == 0 else target.dependencies[file_id - 1]) + str(target_obj.m_PathID)
                     target = nodes_dict[identification]
                     clip_data['animation'] = spine_container.get_index(target.get_identification())
 
                     data.append(clip_data)
 
-    def test_and_add(self, node: UnityResourceNode):
-        if node.name.endswith('_TimeLine'):
+    def test_and_add(self, node):
+        if node.name.endswith('_Timeline'):
             self.nodes.append(node)
             return True
         return False
@@ -799,7 +820,7 @@ class Timeline(ContainerObject):
 class AmbientEvent(ContainerObject):
 
     def process(self):
-        for _, node in self.nodes:
+        for _, node in self.nodes.items():
             target_node = node.children['ambientEvent']
             target_obj = target_node.obj
             self.data.append({
@@ -809,7 +830,7 @@ class AmbientEvent(ContainerObject):
                 'audio': target_node.children['Clip'].obj
             })
 
-    def test_and_add(self, node: UnityResourceNode):
+    def test_and_add(self, node):
         if hasattr(node.obj, 'ambientEvent'):
             self.nodes[node.get_identification()] = node
             return True
@@ -820,22 +841,32 @@ class Container:
     containerObjectType = {
         # 'AudioClip': (0, AudioClip),
         # # 'Sprite': (1, Sprite),
-        # 'GameObject': (1, GameObject),
-        'SpineClips': (0, SpineClips),
-        'InteractiveConfig': (1, InteractiveConfig),
+        'GameObject': (0, GameObject),
+        'SpineClips': (1, SpineClips),
+        'InteractiveConfig': (2, InteractiveConfig),
         # 'ViewBoundsConfig': (3, ViewBoundsConfig),
-        'PostProcessing': (2, PostProcessing),
-        'SpriteRender': (3, SpriteRender),
-        'Particle': (4, Particle),
-        'Timeline': (5, Timeline),
-        'AmbientEvent': (6, AmbientEvent)
+        'PostProcessing': (3, PostProcessing),
+        'SpriteRender': (4, SpriteRender),
+        'Particle': (5, Particle),
+        'Timeline': (6, Timeline),
+        'AmbientEvent': (7, AmbientEvent)
     }
 
-    def __init__(self, student_name, info_json_manager: util.InfoJsonManger, nodes_dict: list[UnityResourceNode]):
+    def __init__(self, student_name, info_json_manager: util.InfoJsonManger, nodes_dict):
         self.name = student_name
         self.container_objects = (
-            SpineClips(self), InteractiveConfig(self),
+            GameObject(self), SpineClips(self), InteractiveConfig(self),
             PostProcessing(self), SpriteRender(self),
             Particle(self), Timeline(self), AmbientEvent(self))
         self.info_json_manager: util.InfoJsonManger = info_json_manager
         self.nodes_dict = nodes_dict
+
+    def test(self, node):
+        for i in self.container_objects:
+            i.test_and_add(node)
+            # if i.test_and_add(node):
+            #     return
+
+    def process(self):
+        for i in self.container_objects:
+            i.process()

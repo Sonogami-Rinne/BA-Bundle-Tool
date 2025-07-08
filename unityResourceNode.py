@@ -38,8 +38,12 @@ class UnityResourceNode:
             return False
         if util.SAVE_RESOURCE_CLASS_DICT:
             self.data = util.get_data_from_obj(self)
-        self.references[self.cab] = {}
-        self.dependencies = self.obj.assets_file.externals
+        if (len(externals := self.obj.assets_file.externals) > 0 and isinstance(externals[0], str)) or len(externals) == 0:
+            self.dependencies = self.obj.assets_file.externals
+        else:
+            self.dependencies = [
+                i.name.lower() for i in externals
+            ]
 
         return True
 
@@ -110,7 +114,7 @@ class UnityResourceNode:
             if hasattr(obj, 'm_PathID'):
                 # path_id = obj.m_PathID
                 file_id = obj.m_FileID
-                if path_id := obj.m_PathID != 0:
+                if (path_id := obj.m_PathID) != 0:
                     self.references[parent] = (
                         self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
                 return True
@@ -144,9 +148,9 @@ class UnityResourceNode:
                     pass
 
     def walk_through(self):
+
+
         self.__walk_through__(self.obj, None)
-        if len(self.references[self.cab]) == 0:
-            self.references.pop(self.cab)
         return self.references
 
     def add_child(self, attr_path, node):
@@ -154,6 +158,6 @@ class UnityResourceNode:
         node.parents[attr_path] = self
         if self.hierarchy_path:
             if node.type == 'Transform':
-                node.hash_path = self.hierarchy_path
+                node.hierarchy_path = self.hierarchy_path
             elif node.type == 'GameObject':
-                node.hash_path = f'{self.hierarchy_path}/{node.hierarchy_path}'
+                node.hierarchy_path = f'{self.hierarchy_path}/{node.hierarchy_path}'

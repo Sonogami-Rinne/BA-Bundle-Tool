@@ -32,17 +32,19 @@ bundle文件目录
 """
 
 SAVE_RESOURCE_CLASS_DICT = False
-FILE_INFO_JSON_PATH = ""
+FILE_INFO_JSON_PATH = "merged.json"
 """
 记录各个文件基本信息的路径
 """
 
-HASH_INFO_PATH = ""
+HASH_INFO_PATH = "propertyHash.json"
 """
 记录hash信息的文件的路径
 """
 
 MAX_INFO_STR_LENGTH = 256
+
+CONTAINER_RECORD = True
 
 
 def env_load(env):
@@ -155,6 +157,46 @@ def compose_transform_matrix(translation, quaternion, scale):
     return transform_matrix
 
 
+def get_transform(base_node):
+    """
+    从一个GameObject的node那里获取数据
+    :param base_node:
+    :return:
+    """
+    if (transform_matrix := base_node.process_data) is None:
+        node = base_node.children['m_Transform']
+        transform_stack = [node]
+        parent_transform_node = node.children['m_Father']  # 有些奇怪,但m_Father确实是由该节点出去的
+        while parent_transform_node and parent_transform_node.process_data is None:
+            transform_stack.append(parent_transform_node)
+            parent_transform_node = parent_transform_node.children.get('m_Father')
+        if parent_transform_node:
+            transform_matrix = parent_transform_node.process_data
+        else:
+            transform_matrix = np.eye(4)
+        while len(transform_stack) > 0:
+            transform_node = transform_stack.pop()
+            obj = transform_node.obj
+            transform_matrix = np.dot(transform_matrix, compose_transform_matrix(
+                obj.m_LocalPosition, obj.m_LocalRotation, obj.m_LocalScale
+            ))
+            transform_node.process_data = transform_matrix
+        # transform_stack = [node]
+        # parent_transform = node.parent['m_Father']
+        # transform_matrix = np.eye(4)
+        # while parent_transform and parent_transform.process_data is None:
+        #     transform_stack.append(parent_transform)
+        #     parent_transform = parent_transform.parent.get('m_Father')
+        # if parent_transform:
+        #     transform_matrix = parent_transform.process_data
+        # while len(transform_stack) > 0:
+        #     transform = transform_stack.pop()
+        #     transform_matrix = np.dot(transform_matrix, compose_transform_matrix(
+        #         transform.m_LocalPosition, transform.m_LocalRotation, transform.m_LocalScale))
+        #     transform.process_data = transform_matrix
+    return transform_matrix
+
+
 class CLogging:
     """
     日志输出
@@ -179,7 +221,7 @@ class InfoJsonManger:
         self.cab2bundle_json = {}
         self.cab_path_json = {}
         self.property_hash = {}
-        self.path_hash = {}
+        # self.path_hash = {}
 
     def init(self, using_file_info=True, using_hash_info=True):
         if using_file_info:
@@ -210,16 +252,17 @@ class InfoJsonManger:
             return None
         return self.cab2bundle_json[cab_name]
 
-    def add_property_hash(self, property_name):
-        if property_name not in self.property_hash.values():
-            self.property_hash[compute_unity_hash(property_name)] = property_name
+    # def add_property_hash(self, property_name):
+    #     if property_name not in self.property_hash.values():
+    #         self.property_hash[compute_unity_hash(property_name)] = property_name
 
-    def add_path_hash(self, path):
-        if path not in self.path_hash.values():
-            self.path_hash[compute_unity_hash(path)] = path
+    # def add_path_hash(self, path):
+    #     if path not in self.path_hash.values():
+    #         self.path_hash[compute_unity_hash(path)] = path
 
-    def get_property_name(self, property_hash):
-        return self.property_hash.get(property_hash)
+    def get_property_name(self, type_name, property_hash):
+        tmp = self.property_hash[type_name].get(str(property_hash))
+        return tmp
 
     def get_path(self, path_hash):
         """
