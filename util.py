@@ -46,6 +46,11 @@ MAX_INFO_STR_LENGTH = 256
 
 CONTAINER_RECORD = True
 
+BASE_INFO_RECORDER_ON = False
+EXTERNALS_INFO_RECORDER_ON = False
+HASH_INFO_RECORDER_ON = True
+TRACK_INFO_RECORDER_ON = False
+
 
 def env_load(env):
     """
@@ -87,22 +92,22 @@ def get_data_from_obj(obj) -> str:
     :return:
     """
     result = ''
-    for attr_name, attr_value in obj.read_typetree():
-        data = str(attr_value)
-        if len(data) > MAX_INFO_STR_LENGTH:
-            data = 'Too long to display'
-        result += f'{attr_name}: {data}\n'
-    return result
-    # for attr_name in dir(obj):
-    #     attr_value = getattr(obj, attr_name)
-    #     if attr_name.startswith("_") or inspect.isroutine(attr_value) or type(attr_value).__name__ in (
-    #             "PPtr", "SerializedFile", "ObjectReader"):
-    #         continue
-    #     if isinstance(attr_value, list) and len(attr_value) > 0 and type(attr_value[0]).__name__ in (
-    #             "PPtr", "SerializedFile", "ObjectReader"):
-    #         continue
-    #     result += f'{attr_name}: {attr_value}\n'
+    # for attr_name, attr_value in obj.read_typetree():
+    #     data = str(attr_value)
+    #     if len(data) > MAX_INFO_STR_LENGTH:
+    #         data = 'Too long to display'
+    #     result += f'{attr_name}: {data}\n'
     # return result
+    for attr_name in dir(obj):
+        attr_value = getattr(obj, attr_name)
+        if attr_name.startswith("_") or inspect.isroutine(attr_value) or type(attr_value).__name__ in (
+                "PPtr", "SerializedFile", "ObjectReader"):
+            continue
+        if isinstance(attr_value, list) and len(attr_value) > 0 and type(attr_value[0]).__name__ in (
+                "PPtr", "SerializedFile", "ObjectReader"):
+            continue
+        result += f'{attr_name}: {attr_value}\n'
+    return result
 
 
 def compute_unity_hash(s: str) -> int:
@@ -181,19 +186,7 @@ def get_transform(base_node):
                 obj.m_LocalPosition, obj.m_LocalRotation, obj.m_LocalScale
             ))
             transform_node.process_data = transform_matrix
-        # transform_stack = [node]
-        # parent_transform = node.parent['m_Father']
-        # transform_matrix = np.eye(4)
-        # while parent_transform and parent_transform.process_data is None:
-        #     transform_stack.append(parent_transform)
-        #     parent_transform = parent_transform.parent.get('m_Father')
-        # if parent_transform:
-        #     transform_matrix = parent_transform.process_data
-        # while len(transform_stack) > 0:
-        #     transform = transform_stack.pop()
-        #     transform_matrix = np.dot(transform_matrix, compose_transform_matrix(
-        #         transform.m_LocalPosition, transform.m_LocalRotation, transform.m_LocalScale))
-        #     transform.process_data = transform_matrix
+
     return transform_matrix
 
 
@@ -264,103 +257,14 @@ class InfoJsonManger:
         tmp = self.property_hash[type_name].get(str(property_hash))
         return tmp
 
-    def get_path(self, path_hash):
-        """
-        根据path_hash返回GameObject的path(不是pathID)
-        :param path_hash:
-        :return:
-        """
-        return self.path_hash.get(path_hash)
+    # def get_path(self, path_hash):
+    #     """
+    #     根据path_hash返回GameObject的path(不是pathID)
+    #     :param path_hash:
+    #     :return:
+    #     """
+    #     return self.path_hash.get(path_hash)
 
     @staticmethod
     def get_class_type(type_id):
         return inverse_map[str(type_id)]
-
-
-class Recorder:
-    def __init__(self):
-        self.batch_data = {}
-
-    def clear(self):
-        self.batch_data.clear()
-
-    def add(self, *args):
-        data = self.batch_data
-        sub_data = None
-        for i in args:
-            sub_data = data.get(i)
-            if sub_data is None:
-                sub_data = {}
-                data[i] = sub_data
-            data = sub_data
-        return sub_data
-
-    def get_save(self):
-        return self.batch_data
-
-
-class BaseInfoRecorder(Recorder):
-    """
-    MAX_DEPTH 设置为 0, 头节点创建后调用add,自行决定保存时机。保存完手动clear
-    """
-
-    def clear(self):
-        self.batch_data.clear()
-
-    def add(self, bundle_name, cab_name, path_id, node):
-        cab_data = super().add(bundle_name, cab_name, path_id)
-        cab_data[path_id] = {
-            'name': node.name,
-            'type': node.type
-        }
-
-
-class TrackInfoRecorder(Recorder):
-    """
-    遍历extends里面创建一个节点后调用,自行决定保存时机，保存完手动clear
-    """
-
-    def add(self, cab_name, path_id, cab_name1, path_id1, reference_name):
-        path_data = super().add(cab_name, path_id, cab_name1)
-        path_data[path_id1] = reference_name
-
-
-class HashInfoRecorder(Recorder):
-    """
-    新节点创建后调用。不可分批保存，以避免重复.考虑运行时动态获得hash,那么这个就可以废弃了
-    """
-
-    def add(self, node_obj):
-        for attr_name in dir(node_obj):
-            if attr_name.startswith('_') or attr_name in IGNORED_ATTR:
-                continue
-            attr_value = getattr(node_obj, attr_name)
-            if inspect.isroutine(attr_value) or attr_name in self.batch_data.values():
-                continue
-            self.batch_data[compute_unity_hash(attr_name)] = attr_name
-
-
-class ExternalsRecorder(Recorder):
-    """
-    每个bundle或整个流程保存一次。每创建一个Node时add
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.info_json_file_manager: InfoJsonManger or None = None
-
-    def set_info_json_file_manager(self, obj: InfoJsonManger):
-        self.info_json_file_manager = obj
-
-    def add(self, stu_name, node):
-        data = self.batch_data.get(stu_name)
-        if data is None:
-            data = []
-            self.batch_data[stu_name] = data
-
-        for _, tu in node.references:
-            if tu[0] == node.cab:
-                continue
-            bundle_name = self.info_json_file_manager.get_bundle_name(tu[0])
-            if bundle_name not in data:
-                data.append(bundle_name)

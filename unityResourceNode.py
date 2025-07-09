@@ -2,7 +2,7 @@ import inspect
 
 import util
 from util import CLogging, InfoJsonManger
-from container import Container
+from recorder.container import Container
 from fileManager import FileManager
 
 
@@ -38,12 +38,16 @@ class UnityResourceNode:
             return False
         if util.SAVE_RESOURCE_CLASS_DICT:
             self.data = util.get_data_from_obj(self)
-        if (len(externals := self.obj.assets_file.externals) > 0 and isinstance(externals[0], str)) or len(externals) == 0:
+        if (len(externals := self.obj.assets_file.externals) > 0 and isinstance(externals[0], str)) or len(
+                externals) == 0:
             self.dependencies = self.obj.assets_file.externals
         else:
             self.dependencies = [
                 i.name.lower() for i in externals
             ]
+        if self.type == 'AnimationClip':
+            self.animation_clip_references = {}
+            self.pptr_curve_bindings_references = {}
 
         return True
 
@@ -52,14 +56,14 @@ class UnityResourceNode:
             if item.test_and_add(self):
                 return
 
-    def get_node(self):
+    def get_node(self, ignore_identification=True):
         """
         pyvis构建network所需的当前节点的信息
         :return: (节点标识， 节点名， 节点颜色， 节点信息)
         """
-        return self.cab + str(self.path_id), self.name, \
-            '#000000', \
-            self.data if util.SAVE_RESOURCE_CLASS_DICT else self.type
+        return (self.name, '#000000', self.data if util.SAVE_RESOURCE_CLASS_DICT else self.type) \
+            if ignore_identification else (self.cab + str(self.path_id), self.name, '#000000',
+                                           self.data if util.SAVE_RESOURCE_CLASS_DICT else self.type)
 
     def get_identification(self):
         return self.cab + str(self.path_id)
@@ -148,8 +152,6 @@ class UnityResourceNode:
                     pass
 
     def walk_through(self):
-
-
         self.__walk_through__(self.obj, None)
         return self.references
 
@@ -161,3 +163,4 @@ class UnityResourceNode:
                 node.hierarchy_path = self.hierarchy_path
             elif node.type == 'GameObject':
                 node.hierarchy_path = f'{self.hierarchy_path}/{node.hierarchy_path}'
+
