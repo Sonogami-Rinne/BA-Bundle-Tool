@@ -4,11 +4,7 @@ from fileManager import FileManager
 from unityResourceNode import UnityResourceNode
 import util
 from util import CLogging
-from recorder.container import Container
-from recorder.BaseInfoRecorder import BaseInfoRecorder
-from recorder.ExternalsRecorder import ExternalsRecorder
-from recorder.HashInfoRecorder import HashInfoRecorder
-from recorder.TrackInfoRecorder import TrackInfoRecorder
+
 
 
 def single_reference(data: tuple):
@@ -18,7 +14,7 @@ def single_reference(data: tuple):
     """
 
     identifications: dict[str, UnityResourceNode] = {}
-    head = UnityResourceNode((data[0], data[1], data[2], data[3]), file_manager, info_json_manager, root=True)
+    head = UnityResourceNode((data[0], data[1], data[2], data[3]), file_manager, info_json_manager)
     # target_nodes[Container.containerObjectType['ViewBounds'][0]].append(head)
     if not head.init():
         CLogging.error('Please select another file as this file is ignored')
@@ -79,8 +75,8 @@ def run_files_in_single_bundle(file, save_path):
             util.CLogging.info(f'当前学生:{cur_student[0]}')
             # dependency_track[cur_student[0]] = {}
             # dependencies_in_total[cur_student[0]] = []
-            saving(path=save_path, nodes=single_reference((cab_name, path, data['type'], data['name'])),
-                   stu=cur_student[0])
+            # saving(nodes=single_reference((cab_name, path, data['type'], data['name'])),
+            #        stu=cur_student[0], save_path=save_path)
 
 
 def run_bundles(bundle_filter, save_folder):
@@ -98,14 +94,6 @@ def run_bundles(bundle_filter, save_folder):
             # cur_student = ['1']
             #
             # runner.test()
-
-
-def saving(save_path, nodes, stu):
-    container = Container(stu, info_json_manager, nodes) if util.CONTAINER_RECORD else None
-    b_recorder = BaseInfoRecorder() if util.BASE_INFO_RECORDER_ON else None
-    e_recorder = ExternalsRecorder() if util.EXTERNALS_INFO_RECORDER_ON else None
-    h_recorder = HashInfoRecorder() if util.HASH_INFO_RECORDER_ON else None
-    t_recorder = TrackInfoRecorder() if util.TRACK_INFO_RECORDER_ON else None
 
 
 def show_network_graph(nodes: list[UnityResourceNode]):
@@ -137,4 +125,4 @@ file_manager = FileManager(info_json_manager)
 cur_student = ['1']
 
 run_files_in_single_bundle(file='ui-uilobbyelement-_mxload-2021-05-01_prefab_assets_all_1026699780.bundle',
-                           save_path='', save_method=None)
+                           save_path='')

@@ -18,10 +18,8 @@ class BaseInfoRecorder(Recorder):
         data['name'] = node.name
         data['type'] = node.type
 
-    def notify_bundle(self, bundle, saving=True):
-        if saving:
-            self.count -= 1
-            if self.count == 0:
-                self.count = self.batch_size
-                self._save_data('to' + bundle)
-
+    def notify_bundle(self, bundle):
+        self.count -= 1
+        if self.count == 0:
+            self.count = self.batch_size
+            self._save_data('to' + bundle)

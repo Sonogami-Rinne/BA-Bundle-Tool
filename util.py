@@ -46,10 +46,11 @@ MAX_INFO_STR_LENGTH = 256
 
 CONTAINER_RECORD = True
 
-BASE_INFO_RECORDER_ON = False
-EXTERNALS_INFO_RECORDER_ON = False
-HASH_INFO_RECORDER_ON = True
-TRACK_INFO_RECORDER_ON = False
+RECORDER_BASE_INFO = False
+RECORDER_EXTERNAL = False
+RECORDER_HASH_INFO = True
+RECORDER_TRACK_INFO = False
+RECORDER_TRACK_VISUALIZATION = False
 
 
 def env_load(env):
@@ -92,21 +93,10 @@ def get_data_from_obj(obj) -> str:
     :return:
     """
     result = ''
-    # for attr_name, attr_value in obj.read_typetree():
-    #     data = str(attr_value)
-    #     if len(data) > MAX_INFO_STR_LENGTH:
-    #         data = 'Too long to display'
-    #     result += f'{attr_name}: {data}\n'
-    # return result
-    for attr_name in dir(obj):
-        attr_value = getattr(obj, attr_name)
-        if attr_name.startswith("_") or inspect.isroutine(attr_value) or type(attr_value).__name__ in (
-                "PPtr", "SerializedFile", "ObjectReader"):
-            continue
-        if isinstance(attr_value, list) and len(attr_value) > 0 and type(attr_value[0]).__name__ in (
-                "PPtr", "SerializedFile", "ObjectReader"):
-            continue
-        result += f'{attr_name}: {attr_value}\n'
+    for name, data in obj.object_reader.read_typetree():
+        if len(line := str(data)) > MAX_INFO_STR_LENGTH:
+            line = 'Too long to display'
+        result += f'{name}: {line}\n'
     return result
 
 

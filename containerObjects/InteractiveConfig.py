@@ -1,5 +1,5 @@
 import util
-from recorder.containerObjects.ContainerObject import ContainerObject
+from containerObjects.ContainerObject import ContainerObject
 # from container import Container
 
 
@@ -24,10 +24,6 @@ class InteractiveConfig(ContainerObject):
     def process(self):
 
         for identification, node in self.nodes.items():
-            # tmp = node.name.endswith('IK')
-            # test = (lambda item: hasattr(item.obj, 'BoneCenterOffset')) \
-            #     if tmp else (lambda item: item.children.get('spineCharacter') is not None)
-            # fetch = InteractiveConfig.fetch_data if tmp else lambda x: None
             node_data = {}
             for attr_name, component_data in node.children.items():
                 if not attr_name.startswith('m_Components'):
@@ -40,10 +36,10 @@ class InteractiveConfig(ContainerObject):
                     }
                 elif node.name.endswith('IK'):
                     node_data['data'] = self.fetch_data(node)
-                # elif test(node):
-                #     node_data['data'] = fetch(node)
 
             node_data['transform_matrix'] = util.get_transform(node)
+            node_data['name'] = node.name
+            node_data['gameObject'] = node.get_identification()  # 对于timeline里面对属性的修改，没办法保证是哪个的enable或者active,只能手动重定向了,因此先记录这个gameObject
             self.data_keys.append(identification)
             self.data.append(node_data)
 
@@ -52,3 +48,8 @@ class InteractiveConfig(ContainerObject):
             self.nodes[node.get_identification()] = node
             return True
         return False
+
+    # def save_data(self, base_path):
+    #     base_path.mkdir(parents=True, exist_ok=True)
+    #     with open(os.path.join(base_path, "interactive.json"), 'w+', encoding='utf-8') as f:
+    #         json.dump(self.data, f, indent=2)

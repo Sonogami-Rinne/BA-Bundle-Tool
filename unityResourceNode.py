@@ -1,31 +1,35 @@
 import inspect
+import json
+
+from typeId import ClassIDType, inverse_map
 
 import util
 from util import CLogging, InfoJsonManger
-from recorder.container import Container
+from containerObjects.index import Container
 from fileManager import FileManager
 
 
 class UnityResourceNode:
-    def __init__(self, target_info: tuple, file_manager: FileManager, info_json_manager: InfoJsonManger, root=False):
-        self.root = root
+
+    def __init__(self, target_info: tuple, file_manager: FileManager, info_json_manager: InfoJsonManger):
         self.cab = target_info[0]
         self.path_id = target_info[1]
-        self.type = target_info[2]
+        self.type = getattr(ClassIDType, target_info[2])
         self.name = target_info[3]
         self.file_manager = file_manager
         self.info_json_manager = info_json_manager
         self.bundle = info_json_manager.get_bundle_name(self.cab)
         self.references = {}
         self.obj = None
-        self.data = None
         self.parents: dict[str:UnityResourceNode] = {}
         self.children: dict[str:UnityResourceNode] = {}
-        self.next = None
-        self.process_data = None
-        self.hierarchy_path = self.name if self.type == 'GameObject' else None
-        self.hash_reference = {}
+        self.next = None  # 用于链表
         self.dependencies = None
+
+        self.process_data = None  # Transform,GameObject的变化矩阵的存储
+        self.hierarchy_path = self.name if self.type == 'GameObject' else None  # GameObject的路径
+        self.transform = None  # gameObject的Transform节点，由于经常用到，故单独记录
+        # self.hash_reference = {}
 
     def __str__(self):
         return self.get_identification()
@@ -36,34 +40,32 @@ class UnityResourceNode:
         self.obj = self.file_manager.get_obj(self.cab, self.path_id)
         if self.obj is None:
             return False
-        if util.SAVE_RESOURCE_CLASS_DICT:
-            self.data = util.get_data_from_obj(self)
-        if (len(externals := self.obj.assets_file.externals) > 0 and isinstance(externals[0], str)) or len(
-                externals) == 0:
-            self.dependencies = self.obj.assets_file.externals
-        else:
-            self.dependencies = [
-                i.name.lower() for i in externals
-            ]
-        if self.type == 'AnimationClip':
-            self.animation_clip_references = {}
-            self.pptr_curve_bindings_references = {}
+
+        if (dependencies := self.file_manager.get_dependencies(self.cab)) is None:
+            if (len(externals := self.obj.assets_file.externals) > 0 and isinstance(externals[0], str)) or len(
+                    externals) == 0:
+                dependencies = externals
+            else:
+                dependencies = [
+                    i.name.lower() for i in externals
+                ]
+            self.file_manager.add_dependencies(self.cab, dependencies)
+        self.dependencies = dependencies
 
         return True
-
-    def test(self, container: Container):
-        for item in container.container_objects:
-            if item.test_and_add(self):
-                return
 
     def get_node(self, ignore_identification=True):
         """
         pyvis构建network所需的当前节点的信息
         :return: (节点标识， 节点名， 节点颜色， 节点信息)
         """
-        return (self.name, '#000000', self.data if util.SAVE_RESOURCE_CLASS_DICT else self.type) \
+        data = None
+        type_name = inverse_map[str(self.type)]
+        if util.SAVE_RESOURCE_CLASS_DICT:
+            data = util.get_data_from_obj(self.obj)
+        return (self.name, '#000000', data if util.SAVE_RESOURCE_CLASS_DICT else type_name) \
             if ignore_identification else (self.cab + str(self.path_id), self.name, '#000000',
-                                           self.data if util.SAVE_RESOURCE_CLASS_DICT else self.type)
+                                           data if util.SAVE_RESOURCE_CLASS_DICT else type_name)
 
     def get_identification(self):
         return self.cab + str(self.path_id)
@@ -79,88 +81,54 @@ class UnityResourceNode:
         ]
 
     def __walk_through__(self, obj, parent):
+        """
+        遍历dict或list.起始为object_reader.read_typetree()
+        :param obj:
+        :param parent:
+        :return:
+        """
         if obj is None:
             return
-        parent_ = "" if parent is None else parent + '-'
-        if isinstance(obj, list):
-            if len(obj) == 0:
-                return
-            for i in range(len(obj)):
-                self.__walk_through__(obj[i], f'{parent_}{i}')
-            return
-
-        elif isinstance(obj, dict):
-            file_id = obj.get('m_FileID')
-            if path_id := obj.get('m_PathID'):
+        parent_ = parent + '-' if parent else parent
+        if isinstance(obj, dict):
+            if (path_id := obj.get('m_PathID')) is not None:
                 if path_id != 0:
-                    self.references[parent] = (
-                        self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
-                    #  self.references[parent] = (self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
-                return True
-            for key, value in obj.items():
-                lower_key = key.lower()
-                flag = False
-                for ignored in util.IGNORED_ATTR:
-                    if ignored in lower_key:
-                        flag = True
-                        break
-                if flag:
-                    continue
-
-                self.__walk_through__(value, f'{parent_}{key}')
-            return
-        elif isinstance(obj, tuple):
-            if len(obj) == 2:
-                self.__walk_through__(obj[1], f"{parent_}{obj[0]}")
-            # else:
-            #     logging.info(f'Ignored tuple {str(obj)}')
-        else:
-            if hasattr(obj, 'm_PathID'):
-                # path_id = obj.m_PathID
-                file_id = obj.m_FileID
-                if (path_id := obj.m_PathID) != 0:
-                    self.references[parent] = (
-                        self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
-                return True
-            elif isinstance(obj, (int, float, bool, str)):
+                    if (file_id := obj['m_FileID']) is None:
+                        CLogging.warn('Error, object do not own file_id while owing path_id.Target:')
+                        CLogging.warn(json.dumps(obj, indent=2, ensure_ascii=False))
+                    else:
+                        self.references[parent] = (
+                            self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
+                return  # 只要有m_PathID就可以提前结束
+            else:
+                for name, value in obj.items():
+                    if isinstance(obj, (dict, list)):
+                        self.__walk_through__(value, parent_ + name)
+        elif isinstance(obj, list) and (length := len(obj)) > 0:
+            if isinstance((obj[0]), (str, int, float, bool)):
                 return
-
-            attr_list = dir(obj)
-            for attr_name in attr_list:
-                attr_value = getattr(obj, attr_name)
-                if attr_name.startswith("_") or inspect.isroutine(attr_value):
-                    continue
-                flag = False
-                for ignored in util.IGNORED_ATTR:
-                    lower_attr = attr_name.lower()
-                    if ignored in lower_attr:
-                        flag = True
-                        break
-                if flag:
-                    continue
-                try:
-                    if hasattr(attr_value, 'm_PathID') and getattr(attr_value, 'm_PathID') != 0:
-                        if not hasattr(attr_value, 'm_FileID'):
-                            CLogging.warn("object do not own file id while owning path id")
-                            continue
-                        file_id = attr_value.m_FileID
-                        self.references[f"{parent_}{attr_name}"] = \
-                            (self.cab if file_id == 0 else self.dependencies[file_id - 1], attr_value.m_PathID)
-                    elif not isinstance(attr_value, (int, float, bool, str)):
-                        self.__walk_through__(attr_value, f"{parent_}{attr_name}")
-                except OverflowError:
-                    pass
+            for index in range(length):
+                self.__walk_through__(obj[index], parent_ + str(index))
+        elif isinstance(obj, tuple):
+            #  emm,目前只看到一个两元素的tuple有PPtr
+            if len(obj) == 2:
+                self.__walk_through__(obj[1], parent_ + obj[0])
 
     def walk_through(self):
-        self.__walk_through__(self.obj, None)
+        """
+        遍历属性以获取引用。其实应该遍历object_reader.read_typetree的结果字典的
+        :return:
+        """
+        self.__walk_through__(self.obj.object_reader.read_typetree(), None)
         return self.references
 
     def add_child(self, attr_path, node):
         self.children[attr_path] = node
         node.parents[attr_path] = self
         if self.hierarchy_path:
-            if node.type == 'Transform':
+            if node.type == ClassIDType.Transform:
                 node.hierarchy_path = self.hierarchy_path
-            elif node.type == 'GameObject':
+                if self.type == ClassIDType.GameObject:
+                    self.transform = node
+            elif node.type == ClassIDType.GameObject:
                 node.hierarchy_path = f'{self.hierarchy_path}/{node.hierarchy_path}'
-

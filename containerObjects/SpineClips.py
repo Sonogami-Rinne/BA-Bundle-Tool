@@ -1,4 +1,4 @@
-from recorder.containerObjects.ContainerObject import ContainerObject
+from containerObjects.ContainerObject import ContainerObject
 
 class SpineClips(ContainerObject):
     def __init__(self, parent):

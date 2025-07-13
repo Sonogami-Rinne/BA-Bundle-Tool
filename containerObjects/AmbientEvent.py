@@ -1,4 +1,7 @@
-from recorder.containerObjects.ContainerObject import ContainerObject
+import json
+import os
+
+from containerObjects.ContainerObject import ContainerObject
 
 
 class AmbientEvent(ContainerObject):
@@ -19,3 +22,14 @@ class AmbientEvent(ContainerObject):
             self.nodes[node.get_identification()] = node
             return True
         return False
+
+    def save_data(self, base_path):
+        base_path.mkdir(parents=True, exist_ok=True)
+        item = self.data[0]  # 估计只会有一个
+        audio_obj = item['audio']
+        item.pop('audio')
+        for name, data in audio_obj.samples.items():
+            with open(os.path.join(base_path, 'ambient-' + name), 'wb+') as f:
+                f.write(data)
+        with open(os.path.join(base_path, 'ambient-config.json'), 'w+', encoding='utf-8') as f:
+            json.dump(item, f, indent=2)

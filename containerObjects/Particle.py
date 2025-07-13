@@ -1,5 +1,5 @@
 import util
-from recorder.containerObjects.ContainerObject import ContainerObject
+from containerObjects.ContainerObject import ContainerObject
 
 
 class Particle(ContainerObject):
@@ -355,10 +355,17 @@ class Particle(ContainerObject):
                     obj = _node.obj
                     break
             data['rendererModule'] = Particle.process_particle_renderer(obj)
+            data['name'] = node.name
+            data['gameObject'] = parent.get_identification()
             #  self.data[parent.get_identification()] = data
             self.data.append(data)
-            self.data_keys.append(parent.get_identification())
+            self.data_keys.append(node.get_identification())
 
     def test_and_add(self, node):
         if node.type == 'ParticleSystem':
             self.nodes[node.get_identification()] = node
+
+    # def save_data(self, base_path):
+    #     base_path.mkdir(parents=True, exist_ok=True)
+    #     with open(os.path.join(base_path, 'particle.json'), 'w+', encoding='utf-8') as f:
+    #         json.dump(self.data, )

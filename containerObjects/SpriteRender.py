@@ -1,5 +1,5 @@
 import util
-from recorder.containerObjects.ContainerObject import ContainerObject
+from containerObjects.ContainerObject import ContainerObject
 
 
 class SpriteRender(ContainerObject):
@@ -11,7 +11,7 @@ class SpriteRender(ContainerObject):
         return False
 
     def process(self):
-        for identification, node in self.nodes.items():
+        for _, node in self.nodes.items():
             obj = node.obj
 
             self.data.append({
@@ -22,6 +22,7 @@ class SpriteRender(ContainerObject):
                 'drawMode': obj.m_DrawMode,
                 'sortingLayer': obj.m_SortingLayer,
                 'maskInteraction': obj.m_MaskInteraction,
-                'transform': util.get_transform(node.children['m_GameObject'])
+                'transform': util.get_transform(node.children['m_GameObject']),
+                'gameObject': node.children['m_GameObject'].get_identification()
             })
-            self.data_keys.append(identification)
+            self.data_keys.append(node.get_identification())

@@ -9,8 +9,7 @@ class HashInfoRecorder(Recorder):
     只记录属性的hash,GameObject的运行时动态记录.整个过程保存一次
     """
 
-    def add_node(self, node):
-
+    def notify_single(self, node):
         if (target := self.batch_data.get(node.type)) is None:
             target = {}
             self.batch_data[node.type] = target
@@ -47,6 +46,6 @@ class HashInfoRecorder(Recorder):
             return True
         return False
 
-    def notify_total(self, saving=True):
-        if saving:
-            self._save_data('hash')
+    def notify_total(self):
+        self._save_data('hash')
+

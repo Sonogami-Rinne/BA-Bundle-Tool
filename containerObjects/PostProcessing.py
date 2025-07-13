@@ -1,5 +1,5 @@
 import util
-from recorder.containerObjects.ContainerObject import ContainerObject
+from containerObjects.ContainerObject import ContainerObject
 
 
 class PostProcessing(ContainerObject):
@@ -46,12 +46,12 @@ class PostProcessing(ContainerObject):
     def process(self):
         for identification, node in self.nodes.items():
             data = {}
-            # low
             for attr_name, component in node.children.items():
                 if attr_name.startswith('components'):
                     return_data = PostProcessing.__process__(component.obj)
                     if return_data is not None:
-                        data['attr_name'] = return_data
+                        data[attr_name] = return_data
+                        data['gameObject'] = node.parents['sharedProfile'].childern['m_GameObject'].get_identification()
             if len(data) > 0:
                 self.data.append(data)
                 self.data_keys.append(identification)

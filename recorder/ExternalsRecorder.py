@@ -8,40 +8,35 @@ class ExternalsRecorder(Recorder):
 
     def __init__(self):
         super().__init__()
-        self.phase_bundle = None
-        self.phase_stu = None
         self.base_bundle = None
-        self.base_dependencies = None
+        self.tmp = {}
 
-    def add_node(self, node):
+    def notify_single(self, node):
         if self.base_bundle is None:
             self.base_bundle = node.bundle
-            self.base_dependencies = node.dependencies
             return
         if self.base_bundle == node.bundle:
             return
 
-        data = self._add_with_test(self.phase_stu)
-        if (bundle_data := data.get(node.bundle)) is None:
+        if (bundle_data := self.tmp.get(node.bundle)) is None:
             bundle_data = []
-            data[node.bundle] = bundle_data
+            self.tmp[node.bundle] = bundle_data
 
         if node.bundle not in bundle_data:
             bundle_data.append(node.bundle)
 
-    def notify_single(self, stu, saving=True):
-        self.phase_stu = stu
+    def notify_bulk(self, stu):
+        self.batch_data[stu] = self.tmp
+        self.tmp.clear()
 
-    def notify_bundle(self, bundle, saving=True):
-        self.phase_bundle = bundle
-        if saving:
-            self.count -= 1
-            if self.count == 0:
-                self.count = self.batch_size
-                self._save_data(bundle)
+    def notify_bundle(self, bundle):
+        self.count -= 1
+        if self.count == 0:
+            self.count = self.batch_size
+            self._save_data(bundle)
 
-    def _save_data(self, name):
-        for _, data in self.batch_data:
-            data.pop(0)  # 最先加进去的节点为自身，得除去
-        
-        super()._save_data(name)
+    # def _save_data(self, name):
+    #     for _, data in self.batch_data:
+    #         data.pop(0)  # 最先加进去的节点为自身，得除去
+    #
+    #     super()._save_data(name)

@@ -10,6 +10,7 @@ class FileManager:
         self.buffer = {}
         self.max_length = util.MAX_BUNDLE_BUFFER_LENGTH
         self.info_json_manager = info_json_manager
+        self.cab_dependencies = {}
 
     def get_obj(self, cab_name, path_id):
         if self.info_json_manager.get_path_info(cab_name, path_id) is None:
@@ -37,6 +38,12 @@ class FileManager:
             first = next(iter(self.buffer))
             del first
         return env_objects
+
+    def get_dependencies(self, cab):
+        return self.cab_dependencies.get(cab)
+
+    def add_dependencies(self, cab, dependencies):
+        self.cab_dependencies[cab] = dependencies
 
     # def get_cab_dependencies(self, cab_name):
     #     return self.cab_path_json[cab_name]['dependencies']

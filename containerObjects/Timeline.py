@@ -3,7 +3,7 @@ import math
 import struct
 
 import util
-from recorder.containerObjects.ContainerObject import ContainerObject
+from containerObjects.ContainerObject import ContainerObject
 from typeId import ClassIDType
 
 
@@ -21,11 +21,10 @@ class Timeline(ContainerObject):
         }
         self.nodes = []
 
-    def process_generic_bindings(self, generic_bindings, node, game_object_container):
+    def _process_generic_bindings(self, generic_bindings, node):
         """
-        :param game_object_container:
         :param generic_bindings:
-        :param node:
+        :param node: UnityResourceNode<AnimationClip>
         :return: list[{'node','property','isPPtrCurve','curve'}]
         """
         info_json_manager = self.parent_container.info_json_manager
@@ -39,15 +38,13 @@ class Timeline(ContainerObject):
             data = {}
 
             type_name = util.InfoJsonManger.get_class_type(item.typeID)
+            path = game_object_dict.get_path(item.path)
+            data['gameObject'] = path.get_identification()
             if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象
                 file_id = script.m_FileID
                 identification = (node.cab if file_id == 0 else dependencies[file_id - 1]) + str(path_id)
                 data['node'] = nodes_dict[identification]
             else:
-                #  path = info_json_manager.get_path(item['path'])
-
-                #  path = game_object_container.get_path(item.path)
-                path = game_object_dict.get_path(item.path)
                 data = {}
 
                 if item.typeID == ClassIDType.GameObject:
@@ -71,7 +68,7 @@ class Timeline(ContainerObject):
         }
 
     @staticmethod
-    def parse_streamed_clip(streamed, generic_bindings):
+    def _parse_streamed_clip(streamed, generic_bindings):
         """
         从muscleClip的m_Clip里面读取数据
         :param streamed:
@@ -124,14 +121,13 @@ class Timeline(ContainerObject):
                 }
                 animation_clip = _node.children['m_InfiniteClip'].obj  # .obj.read_typetree()  # 假设只有m_InfinityClip
                 # data['genericBindings'] = animation_clip['m_ClipBindingConstant']
-                generic_bindings = self.process_generic_bindings(animation_clip.m_ClipBindingConstant, _node,
-                                                                 game_object_container)
+                generic_bindings = self._process_generic_bindings(animation_clip.m_ClipBindingConstant, _node)
 
                 animation_clip = animation_clip.m_MuscleClip.m_Clip.data
                 if len(animation_clip.m_DenseClip.m_SampleArray) > 0:
                     util.CLogging.error('Error, length of m_SampleArray is not 0')
 
-                data['data'] = Timeline.parse_streamed_clip(animation_clip.m_StreamedClip, generic_bindings)
+                data['data'] = Timeline._parse_streamed_clip(animation_clip.m_StreamedClip, generic_bindings)
                 self.data['animationClip'].append(data)
 
             elif _node.name.startswith('SFX'):  # Sound Fix
@@ -197,3 +193,7 @@ class Timeline(ContainerObject):
             self.nodes.append(node)
             return True
         return False
+
+    def save_data(self, base_path):
+        base_path.mkdir(parents=True, exist_ok=True)
+
