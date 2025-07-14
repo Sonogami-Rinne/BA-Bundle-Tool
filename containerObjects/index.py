@@ -1,6 +1,7 @@
 import os
 import pathlib
 
+import infoJsonManager
 import util
 from containerObjects.AmbientEvent import AmbientEvent
 from containerObjects.GameObject import GameObject
@@ -13,13 +14,12 @@ from containerObjects.Timeline import Timeline
 
 
 class Container:
-    def __init__(self, student_name, info_json_manager: util.InfoJsonManger, nodes_dict):
-        self.name = student_name
+    def __init__(self, info_json_manager: infoJsonManager.InfoJsonManger, nodes_dict):
         self.container_objects = (
             GameObject(self), SpineClips(self), InteractiveConfig(self),
             PostProcessing(self), SpriteRender(self),
-            Particle(self), Timeline(self), AmbientEvent(self))
-        self.info_json_manager: util.InfoJsonManger = info_json_manager
+            Particle(self), Timeline(self), AmbientEvent(self)) if util.CONTAINER_RECORD else ()
+        self.info_json_manager: infoJsonManager.InfoJsonManger = info_json_manager
         self.nodes_dict = nodes_dict
 
     # def add_node(self, node):  # test_and_add
@@ -28,7 +28,7 @@ class Container:
     #         # if i.test_and_add(node):
     #         #     return
 
-    def notify_single(self, node, name=None):  # process
+    def notify_single(self, node):  # process
         for i in self.container_objects:
             i.test_and_add(node)
 

@@ -1,5 +1,6 @@
 from containerObjects.ContainerObject import ContainerObject
 import util
+from typeId import ClassIDType
 
 
 class GameObject(ContainerObject):
@@ -8,7 +9,7 @@ class GameObject(ContainerObject):
     """
 
     def test_and_add(self, node):
-        if node.type == 'GameObject':
+        if node.type == ClassIDType.GameObject:
             self.nodes[node.get_identification()] = node
             return True
         return False

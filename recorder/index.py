@@ -1,17 +1,13 @@
 import util
-from BaseInfoRecorder import BaseInfoRecorder
-from ExternalsRecorder import ExternalsRecorder
-from HashInfoRecorder import HashInfoRecorder
-from TrackInfoRecorder import TrackInfoRecorder
-from TrackVisualizationRecorder import TrackVisualizationRecorder
+from recorder.ExternalsRecorder import ExternalsRecorder
+from recorder.HashInfoRecorder import HashInfoRecorder
+from recorder.TrackInfoRecorder import TrackInfoRecorder
+from recorder.TrackVisualizationRecorder import TrackVisualizationRecorder
 
 
 class Recorder:
-    def __init__(self, student_name):
-        self.name = student_name
+    def __init__(self):
         self.container_objects = []
-        if util.RECORDER_BASE_INFO:
-            self.container_objects.append(BaseInfoRecorder)
         if util.RECORDER_EXTERNAL:
             self.container_objects.append(ExternalsRecorder())
         if util.RECORDER_HASH_INFO:
@@ -26,13 +22,16 @@ class Recorder:
             i.notify_single(node)
 
     def notify_bulk(self, stu):
-        pass
+        for i in self.container_objects:
+            i.notify_bulk(stu)
 
     def notify_bundle(self, bundle):
-        return
+        for i in self.container_objects:
+            i.notify_bundle(bundle)
 
     def notify_total(self):
-        return
+        for i in self.container_objects:
+            i.notify_total()
 
     # def process(self):
     #     for i in self.container_objects:

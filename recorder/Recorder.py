@@ -14,9 +14,9 @@ class Recorder:
         存储数据
         :return:
         """
-        path = pathlib.Path(os.path.join('save', 'recorder', self.__class__.__name__, name + '.json'))
+        path = pathlib.Path(os.path.join('save', 'recorder', self.__class__.__name__))
         path.mkdir(parents=True, exist_ok=True)
-        with open(path, encoding='utf-8') as f:
+        with open(os.path.join(path, name + '.json'), 'w+', encoding='utf-8') as f:
             json.dump(self.batch_data, f, indent=2)
         self._clear()
 

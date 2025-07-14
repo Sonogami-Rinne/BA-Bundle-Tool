@@ -3,7 +3,7 @@ import pathlib
 
 from pyvis.network import Network
 
-from Recorder import Recorder
+from recorder.Recorder import Recorder
 
 
 class TrackVisualizationRecorder(Recorder):

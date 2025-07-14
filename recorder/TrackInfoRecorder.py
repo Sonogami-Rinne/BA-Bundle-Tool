@@ -24,4 +24,4 @@ class TrackInfoRecorder(Recorder):
         self.count -= 1
         if self.count == 0:
             self.count = self.batch_size
-            self._save_data('to' + bundle)
+            self._save_data('to-' + bundle)

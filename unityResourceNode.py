@@ -1,11 +1,12 @@
 import inspect
 import json
+import typing
 
 from typeId import ClassIDType, inverse_map
 
 import util
-from util import CLogging, InfoJsonManger
-from containerObjects.index import Container
+from util import CLogging
+from infoJsonManager import InfoJsonManger
 from fileManager import FileManager
 
 
@@ -14,7 +15,7 @@ class UnityResourceNode:
     def __init__(self, target_info: tuple, file_manager: FileManager, info_json_manager: InfoJsonManger):
         self.cab = target_info[0]
         self.path_id = target_info[1]
-        self.type = getattr(ClassIDType, target_info[2])
+        self.type = target_info[2]
         self.name = target_info[3]
         self.file_manager = file_manager
         self.info_json_manager = info_json_manager
@@ -27,7 +28,7 @@ class UnityResourceNode:
         self.dependencies = None
 
         self.process_data = None  # Transform,GameObject的变化矩阵的存储
-        self.hierarchy_path = self.name if self.type == 'GameObject' else None  # GameObject的路径
+        self.hierarchy_path = self.name if self.type == ClassIDType.GameObject else None  # GameObject的路径
         self.transform = None  # gameObject的Transform节点，由于经常用到，故单独记录
         # self.hash_reference = {}
 
@@ -41,7 +42,7 @@ class UnityResourceNode:
         if self.obj is None:
             return False
 
-        if (dependencies := self.file_manager.get_dependencies(self.cab)) is None:
+        if (dependencies := self.info_json_manager.get_dependencies(self.cab)) is None:
             if (len(externals := self.obj.assets_file.externals) > 0 and isinstance(externals[0], str)) or len(
                     externals) == 0:
                 dependencies = externals
@@ -49,7 +50,7 @@ class UnityResourceNode:
                 dependencies = [
                     i.name.lower() for i in externals
                 ]
-            self.file_manager.add_dependencies(self.cab, dependencies)
+            self.info_json_manager.add_dependencies(self.cab, dependencies)
         self.dependencies = dependencies
 
         return True
@@ -113,6 +114,8 @@ class UnityResourceNode:
             #  emm,目前只看到一个两元素的tuple有PPtr
             if len(obj) == 2:
                 self.__walk_through__(obj[1], parent_ + obj[0])
+        else:
+            CLogging.warn(f'Ignored object type: {obj.__class__.__name__}')
 
     def walk_through(self):
         """

@@ -1,6 +1,6 @@
 import util
 from containerObjects.ContainerObject import ContainerObject
-# from container import Container
+from typeId import ClassIDType
 
 
 class InteractiveConfig(ContainerObject):
@@ -44,7 +44,7 @@ class InteractiveConfig(ContainerObject):
             self.data.append(node_data)
 
     def test_and_add(self, node):
-        if node.name == 'BodyTouch' or (node.name.endswith('IK') and node.type == 'GameObject'):
+        if node.name == 'BodyTouch' or (node.name.endswith('IK') and node.type == ClassIDType.GameObject):
             self.nodes[node.get_identification()] = node
             return True
         return False

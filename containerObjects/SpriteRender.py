@@ -1,11 +1,12 @@
 import util
 from containerObjects.ContainerObject import ContainerObject
+from typeId import ClassIDType
 
 
 class SpriteRender(ContainerObject):
 
     def test_and_add(self, node):
-        if node.type == 'SpriteRenderer':
+        if node.type == ClassIDType.SpriteRenderer:
             self.nodes[node.get_identification()] = node
             return True
         return False

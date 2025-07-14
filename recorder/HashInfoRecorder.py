@@ -1,6 +1,6 @@
 import util
 from recorder.Recorder import Recorder
-from util import IGNORED_ATTR, compute_unity_hash
+from typeId import ClassIDType, inverse_map
 import inspect
 
 
@@ -10,34 +10,22 @@ class HashInfoRecorder(Recorder):
     """
 
     def notify_single(self, node):
-        if (target := self.batch_data.get(node.type)) is None:
+        if (target := self.batch_data.get(inverse_map[str(node.type)])) is None:
             target = {}
-            self.batch_data[node.type] = target
+            self.batch_data[inverse_map[str(node.type)]] = target
 
-        if len(target) == 0 or node.type == 'MonoBehaviour':
-            obj = node.obj
-            for attr_name in dir(obj):
-                if attr_name.startswith('_') or attr_name in util.IGNORED_ATTR:
-                    continue
-                if inspect.isroutine((attr_value := getattr(obj, attr_name))):
-                    continue
-                #  对于这几个特殊的，是直接修改其内的值的
-                if type(attr_value).__name__ == 'ColorRGBA':
-                    if HashInfoRecorder._add_obj(target, attr_name + '.r'):
-                        HashInfoRecorder._add_obj(target, attr_name + '.g')
-                        HashInfoRecorder._add_obj(target, attr_name + '.b')
-                        HashInfoRecorder._add_obj(target, attr_name + '.a')
-                elif type(attr_value).__name__.startswith('Vector'):
-                    if HashInfoRecorder._add_obj(target, attr_name + '.x'):
-                        HashInfoRecorder._add_obj(target, attr_name + '.y')
-                        HashInfoRecorder._add_obj(target, attr_name + '.z')  # 虽然如果是vector2的话没有这个z，但也无妨
-                elif type(attr_value).__name__ == 'Quaternion':
-                    if HashInfoRecorder._add_obj(target, attr_name + '.x'):
-                        HashInfoRecorder._add_obj(target, attr_name + '.y')
-                        HashInfoRecorder._add_obj(target, attr_name + '.z')
-                        HashInfoRecorder._add_obj(target, attr_name + '.w')
-                else:  # 其实应该只加入类型为基本数据类型和PPtr的。但也没事
-                    HashInfoRecorder._add_obj(target, attr_name)
+        if len(target) == 0 or node.type == ClassIDType.MonoBehaviour:
+            for name, value in node.obj.object_reader.read_typetree().items():
+                if value.get('r') is not None and HashInfoRecorder._add_obj(target, name + '.r'):
+                    HashInfoRecorder._add_obj(target, name + '.g')
+                    HashInfoRecorder._add_obj(target, name + '.b')
+                    HashInfoRecorder._add_obj(target, name + '.a')
+                elif value.get('x') is not None and HashInfoRecorder._add_obj(target, name + '.x'):
+                    HashInfoRecorder._add_obj(target, name + '.y')
+                    HashInfoRecorder._add_obj(target, name + '.z')
+                    HashInfoRecorder._add_obj(target, name + '.w')
+                else:
+                    HashInfoRecorder._add_obj(target, name)
 
     @staticmethod
     def _add_obj(target_dict, value):
@@ -48,4 +36,3 @@ class HashInfoRecorder(Recorder):
 
     def notify_total(self):
         self._save_data('hash')
-

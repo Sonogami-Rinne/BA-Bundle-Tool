@@ -2,6 +2,7 @@ import io
 import math
 import struct
 
+import infoJsonManager
 import util
 from containerObjects.ContainerObject import ContainerObject
 from typeId import ClassIDType
@@ -37,7 +38,7 @@ class Timeline(ContainerObject):
             script = item.script
             data = {}
 
-            type_name = util.InfoJsonManger.get_class_type(item.typeID)
+            type_name = infoJsonManager.InfoJsonManger.get_class_type(item.typeID)
             path = game_object_dict.get_path(item.path)
             data['gameObject'] = path.get_identification()
             if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象

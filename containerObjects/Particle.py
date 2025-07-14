@@ -1,5 +1,6 @@
 import util
 from containerObjects.ContainerObject import ContainerObject
+from typeId import ClassIDType
 
 
 class Particle(ContainerObject):
@@ -351,7 +352,7 @@ class Particle(ContainerObject):
             data = Particle.process_particle_system(obj)
             parent = node.children['m_GameObject']
             for _, _node in parent.children.items():
-                if _node.type == 'ParticleSystemRenderer':
+                if _node.type == ClassIDType.ParticleSystemRenderer:
                     obj = _node.obj
                     break
             data['rendererModule'] = Particle.process_particle_renderer(obj)
@@ -362,7 +363,7 @@ class Particle(ContainerObject):
             self.data_keys.append(node.get_identification())
 
     def test_and_add(self, node):
-        if node.type == 'ParticleSystem':
+        if node.type == ClassIDType.ParticleSystem:
             self.nodes[node.get_identification()] = node
 
     # def save_data(self, base_path):

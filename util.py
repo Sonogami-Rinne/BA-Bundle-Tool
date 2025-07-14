@@ -1,27 +1,14 @@
-import inspect
-import json
 import zlib
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-from typeId import inverse_map
-
-IGNORED_ATTR = ['object_reader', 'assetsfile', '__node__', 'assets_file']
-"""
-在遍历对象的属性时忽略的属性
-"""
 
 IGNORED_RESOURCE_CLASS = ['AssetBundle']
 """
 忽略的资源类型
 """
 
-MAX_DEPTH = 50
-"""
-遍历引用时最大遍历深度
-"""
-
-MAX_BUNDLE_BUFFER_LENGTH = 150
+MAX_BUFFER_LENGTH = 100
 """
 缓冲区最大文件数目
 """
@@ -44,11 +31,15 @@ HASH_INFO_PATH = "propertyHash.json"
 
 MAX_INFO_STR_LENGTH = 256
 
-CONTAINER_RECORD = True
+MAX_DEPTH = 0
+"""
+遍历引用时最大遍历深度
+"""
 
-RECORDER_BASE_INFO = False
+CONTAINER_RECORD = False
+
 RECORDER_EXTERNAL = False
-RECORDER_HASH_INFO = True
+RECORDER_HASH_INFO = False
 RECORDER_TRACK_INFO = False
 RECORDER_TRACK_VISUALIZATION = False
 
@@ -66,22 +57,9 @@ def env_load(env):
         cab_data = {}
         for path_id, file in cab_value.files.items():
             if file.type.name not in IGNORED_RESOURCE_CLASS:
-                file_data = file.read()
-                cab_data[path_id] = {
-                    'type': file.type.name,
-                    'name': file_data.m_Name if hasattr(file_data, 'm_Name') else 'Unknown',
-                    'obj': file_data
-                }
+                cab_data[path_id] = file.read()
             if len(cab_data) > 0:
-                cab_dependencies = [
-                    i.name.lower() for i in cab_value.externals
-                ]
-                if cab_dependencies is None:
-                    cab_dependencies = cab_value.assetbundle.assets_file.assetbundle.m_Dependencies
-                file_objects[cab_name] = {
-                    'data': cab_data,
-                    'dependencies': cab_dependencies
-                }
+                file_objects[cab_name] = cab_data
 
     return file_objects
 
@@ -159,7 +137,7 @@ def get_transform(base_node):
     :return:
     """
     if (transform_matrix := base_node.process_data) is None:
-        node = base_node.children['m_Transform']
+        node = base_node.transform
         transform_stack = [node]
         parent_transform_node = node.children['m_Father']  # 有些奇怪,但m_Father确实是由该节点出去的
         while parent_transform_node and parent_transform_node.process_data is None:
@@ -198,63 +176,3 @@ class CLogging:
         print(f"\033[97m{message}\033[0m")
 
 
-class InfoJsonManger:
-
-    def __init__(self):
-        self.cab2bundle_json = {}
-        self.cab_path_json = {}
-        self.property_hash = {}
-        # self.path_hash = {}
-
-    def init(self, using_file_info=True, using_hash_info=True):
-        if using_file_info:
-            with open(FILE_INFO_JSON_PATH, 'r', encoding='utf-8') as f:
-                tmp = json.loads(f.read())
-                for bundle_name, bundle_data in tmp.items():
-                    for cab_name, cab_data in bundle_data.items():
-                        self.cab2bundle_json[cab_name] = bundle_name
-                        self.cab_path_json[cab_name] = cab_data
-        if using_hash_info:
-            with open(HASH_INFO_PATH, 'r', encoding='utf-8') as f:
-                self.property_hash = json.load(f)
-
-    def get_path_info(self, cab_name, path_id) -> dict or None:
-        if not cab_name.startswith('c'):  # unity default resources
-            return None
-        if self.cab_path_json.get(cab_name) is None:
-            return None
-        if self.cab_path_json[cab_name]['data'].get(str(path_id)) is None:
-            CLogging.error(f'No {path_id} in f{cab_name}')
-            return None
-        return self.cab_path_json[cab_name]['data'][str(path_id)]
-
-    def get_bundle_name(self, cab_name) -> str or None:
-        if not cab_name.startswith('c'):  # unity default resources
-            return None
-        if self.cab2bundle_json.get(cab_name) is None:
-            return None
-        return self.cab2bundle_json[cab_name]
-
-    # def add_property_hash(self, property_name):
-    #     if property_name not in self.property_hash.values():
-    #         self.property_hash[compute_unity_hash(property_name)] = property_name
-
-    # def add_path_hash(self, path):
-    #     if path not in self.path_hash.values():
-    #         self.path_hash[compute_unity_hash(path)] = path
-
-    def get_property_name(self, type_name, property_hash):
-        tmp = self.property_hash[type_name].get(str(property_hash))
-        return tmp
-
-    # def get_path(self, path_hash):
-    #     """
-    #     根据path_hash返回GameObject的path(不是pathID)
-    #     :param path_hash:
-    #     :return:
-    #     """
-    #     return self.path_hash.get(path_hash)
-
-    @staticmethod
-    def get_class_type(type_id):
-        return inverse_map[str(type_id)]
