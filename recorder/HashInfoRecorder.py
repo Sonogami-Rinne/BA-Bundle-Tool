@@ -16,16 +16,18 @@ class HashInfoRecorder(Recorder):
 
         if len(target) == 0 or node.type == ClassIDType.MonoBehaviour:
             for name, value in node.obj.object_reader.read_typetree().items():
-                if value.get('r') is not None and HashInfoRecorder._add_obj(target, name + '.r'):
-                    HashInfoRecorder._add_obj(target, name + '.g')
-                    HashInfoRecorder._add_obj(target, name + '.b')
-                    HashInfoRecorder._add_obj(target, name + '.a')
-                elif value.get('x') is not None and HashInfoRecorder._add_obj(target, name + '.x'):
-                    HashInfoRecorder._add_obj(target, name + '.y')
-                    HashInfoRecorder._add_obj(target, name + '.z')
-                    HashInfoRecorder._add_obj(target, name + '.w')
-                else:
-                    HashInfoRecorder._add_obj(target, name)
+                if isinstance(value, dict):
+                    if value.get('r') is not None and HashInfoRecorder._add_obj(target, name + '.r'):
+                        HashInfoRecorder._add_obj(target, name + '.g')
+                        HashInfoRecorder._add_obj(target, name + '.b')
+                        HashInfoRecorder._add_obj(target, name + '.a')
+                        continue
+                    elif value.get('x') is not None and HashInfoRecorder._add_obj(target, name + '.x'):
+                        HashInfoRecorder._add_obj(target, name + '.y')
+                        HashInfoRecorder._add_obj(target, name + '.z')
+                        HashInfoRecorder._add_obj(target, name + '.w')
+                        continue
+                HashInfoRecorder._add_obj(target, name)
 
     @staticmethod
     def _add_obj(target_dict, value):

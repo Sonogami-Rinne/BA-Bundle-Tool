@@ -1,30 +1,38 @@
 import json
+import pathlib
 
 import util
 from typeId import inverse_map
-from util import FILE_INFO_JSON_PATH, HASH_INFO_PATH, CLogging
+from util import FILE_INFO_JSON_PATH, CLogging, COLORS
 
 
 class InfoJsonManger:
-
     def __init__(self):
         self.cab2bundle_json = {}
         self.cab_path_json = {}
         self.property_hash = {}
         self.dependencies = {}
+        self.colors = {}
         # self.path_hash = {}
 
-    def init(self, using_file_info=True, using_hash_info=True):
-        if using_file_info:
+    def init(self):
+        path = pathlib.Path(FILE_INFO_JSON_PATH)
+        if path.exists():
             with open(FILE_INFO_JSON_PATH, 'r', encoding='utf-8') as f:
                 tmp = json.loads(f.read())
                 for bundle_name, bundle_data in tmp.items():
                     for cab_name, cab_data in bundle_data.items():
                         self.cab2bundle_json[cab_name] = bundle_name
                         self.cab_path_json[cab_name] = cab_data
-        if using_hash_info:
-            with open(HASH_INFO_PATH, 'r', encoding='utf-8') as f:
+        else:
+            CLogging.error('Base info not found.Use generate_baseInfo.py first')
+
+        path = pathlib.Path("save\\recorder\\HashInfoRecorder\\hash.json")
+        if path.exists():
+            with open(path, 'r', encoding='utf-8') as f:
                 self.property_hash = json.load(f)
+        else:
+            CLogging.warn('Hash info json not found')
 
     def get_path_info(self, cab_name, path_id) -> dict or None:
         if not cab_name.startswith('c'):  # unity default resources
@@ -50,28 +58,13 @@ class InfoJsonManger:
         self.dependencies[cab_name] = cab_dependencies
         if len(self.dependencies) > util.MAX_BUFFER_LENGTH:
             first = next(iter(self.dependencies))
-            self.dependencies.pop(first[0])
-
-    # def add_property_hash(self, property_name):
-    #     if property_name not in self.property_hash.values():
-    #         self.property_hash[compute_unity_hash(property_name)] = property_name
-
-    # def add_path_hash(self, path):
-    #     if path not in self.path_hash.values():
-    #         self.path_hash[compute_unity_hash(path)] = path
+            self.dependencies.pop(first)
 
     def get_property_name(self, type_name, property_hash):
         tmp = self.property_hash[type_name].get(str(property_hash))
         return tmp
 
-    # def get_path(self, path_hash):
-    #     """
-    #     根据path_hash返回GameObject的path(不是pathID)
-    #     :param path_hash:
-    #     :return:
-    #     """
-    #     return self.path_hash.get(path_hash)
-
-    @staticmethod
-    def get_class_type(type_id):
-        return inverse_map[str(type_id)]
+    def get_color(self, type_id):
+        if self.colors.get(type_id) is None:
+            self.colors[type_id] = COLORS[len(self.colors) % 51]
+        return self.colors[type_id]

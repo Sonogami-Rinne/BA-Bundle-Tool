@@ -14,17 +14,28 @@ class FileManager:
         self.cab_dependencies = {}
 
     def get_obj(self, cab_name, path_id):
+        """
+        返回common部分的obj
+        :param cab_name:
+        :param path_id:
+        :return:
+        """
         if self.info_json_manager.get_path_info(cab_name, path_id) is None:
             return None
         bundle_name = self.info_json_manager.get_bundle_name(cab_name)
         if (bundle_data := self.buffer.get(bundle_name)) is None:
             env = UnityPy.load(os.path.join(util.BUNDLES_PATH, bundle_name + '.bundle'))
             objects = self.__add_buffer__(env, bundle_name)
-            return objects[cab_name][path_id]
+            return objects[cab_name][path_id][1]
         else:
-            return bundle_data[cab_name][path_id]
+            return bundle_data[cab_name][path_id][1]
 
-    def get_bundle(self, bundle_name):
+    def get_bundle(self, bundle_name) -> dict:
+        """
+        返回common部分的bundle信息
+        :param bundle_name:
+        :return:
+        """
         if (bundle_data := self.buffer.get(bundle_name)) is None:
             env = UnityPy.load(os.path.join(util.BUNDLES_PATH, bundle_name + '.bundle'))
             objects = self.__add_buffer__(env, bundle_name)

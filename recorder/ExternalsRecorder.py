@@ -8,32 +8,22 @@ class ExternalsRecorder(Recorder):
 
     def __init__(self):
         super().__init__()
-        self.base_bundle = None
-        self.tmp = {}
+        self.tmp = []
 
     def notify_single(self, node):
-        if self.base_bundle is None:
-            self.base_bundle = node.bundle
-            return
-        if self.base_bundle == node.bundle:
-            return
-
-        if (bundle_data := self.tmp.get(node.bundle)) is None:
-            bundle_data = []
-            self.tmp[node.bundle] = bundle_data
-
-        if node.bundle not in bundle_data:
-            bundle_data.append(node.bundle)
+        if node.bundle not in self.tmp:  # 算上自身所在的bundle
+            self.tmp.append(node.bundle)
 
     def notify_bulk(self, stu):
         self.batch_data[stu] = self.tmp
-        self.tmp.clear()
+        self.tmp = []
 
-    def notify_bundle(self, bundle):
-        self.count -= 1
-        if self.count == 0:
-            self.count = self.batch_size
-            self._save_data(bundle)
+    def notify_total(self):
+        self._save_data('externals')
+
+    def _clear(self):
+        self.batch_data.clear()
+        self.tmp.clear()
 
     # def _save_data(self, name):
     #     for _, data in self.batch_data:

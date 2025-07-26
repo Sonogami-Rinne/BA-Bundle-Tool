@@ -12,6 +12,7 @@ class SpriteRender(ContainerObject):
         return False
 
     def process(self):
+        game_object_container = self.parent_container.container_objects['GameObject']
         for _, node in self.nodes.items():
             obj = node.obj
 
@@ -24,6 +25,6 @@ class SpriteRender(ContainerObject):
                 'sortingLayer': obj.m_SortingLayer,
                 'maskInteraction': obj.m_MaskInteraction,
                 'transform': util.get_transform(node.children['m_GameObject']),
-                'gameObject': node.children['m_GameObject'].get_identification()
+                'gameObject': game_object_container.get_index(node.children['m_GameObject'].get_identification())
             })
             self.data_keys.append(node.get_identification())

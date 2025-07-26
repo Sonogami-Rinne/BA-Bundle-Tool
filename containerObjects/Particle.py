@@ -318,8 +318,8 @@ class Particle(ContainerObject):
                 'damp': sub_module.dampen,
                 'drag': Particle.process_min_max_curve(sub_module.drag),
                 'magnitude': Particle.process_min_max_curve(sub_module.magnitude),
-                'multiplyDragByParticleSize': sub_module.multuplyDragByParticleSize,
-                'multiplyDragByParticleVelocity': sub_module.multuplyDragByParticleVelocity,
+                'multiplyDragByParticleSize': sub_module.multiplyDragByParticleSize,
+                'multiplyDragByParticleVelocity': sub_module.multiplyDragByParticleVelocity,
                 'separateAxis': sub_module.separateAxis,
                 'curveX': Particle.process_min_max_curve(sub_module.x),
                 'curveY': Particle.process_min_max_curve(sub_module.y),
@@ -346,6 +346,7 @@ class Particle(ContainerObject):
         }
 
     def process(self):
+        game_object_container = self.parent_container.container_objects['GameObject']
         for _, node in self.nodes.items():
             #  先是ParticleSystem
             obj = node.obj
@@ -357,7 +358,7 @@ class Particle(ContainerObject):
                     break
             data['rendererModule'] = Particle.process_particle_renderer(obj)
             data['name'] = node.name
-            data['gameObject'] = parent.get_identification()
+            data['gameObject'] = game_object_container.get_index(parent.get_identification())
             #  self.data[parent.get_identification()] = data
             self.data.append(data)
             self.data_keys.append(node.get_identification())

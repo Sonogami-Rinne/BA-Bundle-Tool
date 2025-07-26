@@ -1,5 +1,6 @@
 from containerObjects.ContainerObject import ContainerObject
 
+
 class SpineClips(ContainerObject):
     def __init__(self, parent):
         super().__init__(parent)
@@ -11,6 +12,7 @@ class SpineClips(ContainerObject):
         }
 
     def process(self):
+        self.clip_keys = list(self.nodes.keys())
         nodes_dict = self.parent_container.nodes_dict
         for _, node in self.nodes.items():
             skeleton_node = node.children['skeletonDataAsset']
@@ -39,7 +41,7 @@ class SpineClips(ContainerObject):
                 'useDefaultOutroMix': node_obj.UseDefaultOutroMix == 1,
                 'isTrackMainIdle': node_obj.IsTrackMainIdle,
                 'syncPlays': [
-                    node.children[i].get_identification() for i in
+                    self.clip_keys.index(node.children[i].get_identification()) for i in
                     list(filter(lambda x: x.startswith('Sync'), node.children.keys()))
                 ]
             }
@@ -54,13 +56,7 @@ class SpineClips(ContainerObject):
                     'audio': target
                 })
             tmp['soundKeys'] = sound_keys
-            self.clip_keys.append(node.get_identification())
             self.data['clips'].append(tmp)
-
-        for clip in self.data['clips']:
-            if (length := len(clip['syncPlays'])) > 0:
-                for i in range(length):
-                    clip['syncPlays'][i] = self.clip_keys.index(clip['syncPlays'][i])
 
     def test_and_add(self, node):
         if hasattr(node.obj, 'ClipName'):

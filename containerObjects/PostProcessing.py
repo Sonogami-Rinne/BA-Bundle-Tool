@@ -31,9 +31,11 @@ class PostProcessing(ContainerObject):
                     else obj.postExposure.m_Value,
                     'saturation': PostProcessing.saturation if obj.saturation.m_OverrideState == 0
                     else obj.saturation.m_Value}
+
         elif obj.m_Name == 'ChromaticAberration':
             return {'intensity': PostProcessing.intensity if obj.intensity.m_OverrideState == 0
             else obj.intensity.m_Value}
+
         elif obj.m_Name == 'LiftGammaGain':
             return {'lift': PostProcessing.lift if obj.lift.m_OverrideState == 0
             else util.to_tuple(obj.lift.m_Value),
@@ -44,6 +46,7 @@ class PostProcessing(ContainerObject):
         return None
 
     def process(self):
+        game_object_container = self.parent_container.container_objects['GameObject']
         for identification, node in self.nodes.items():
             data = {}
             for attr_name, component in node.children.items():
@@ -51,7 +54,11 @@ class PostProcessing(ContainerObject):
                     return_data = PostProcessing.__process__(component.obj)
                     if return_data is not None:
                         data[attr_name] = return_data
-                        data['gameObject'] = node.parents['sharedProfile'].childern['m_GameObject'].get_identification()
+
+                        data['gameObject'] = game_object_container.get_index(
+                            node.parents['sharedProfile'].children['m_GameObject'].get_identification()
+                        )
+
             if len(data) > 0:
                 self.data.append(data)
                 self.data_keys.append(identification)

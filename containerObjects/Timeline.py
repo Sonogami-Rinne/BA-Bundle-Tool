@@ -2,15 +2,16 @@ import io
 import math
 import struct
 
-import infoJsonManager
 import util
 from containerObjects.ContainerObject import ContainerObject
-from typeId import ClassIDType
+from typeId import ClassIDType, inverse_map
+from unityResourceNode import UnityResourceNode
+from linkedList import LinkedList
 
 
 class Timeline(ContainerObject):
     """
-    总的那个时间线
+    总的那个时间线.说实话应该从PlayableDirector开始的
     """
 
     def __init__(self, parent):
@@ -21,6 +22,31 @@ class Timeline(ContainerObject):
             'spineAnimation': []
         }
         self.nodes = []
+        self.game_object_container = None
+
+    @staticmethod
+    def _get_hash_dict(node):
+        result = {}
+        for name, target_node in node.parents.items():
+            if name.endswith('key'):
+                break
+        # 没有保证是否找到，没有保证是否进入循环，不过会报错的
+        name = name.removesuffix('key') + 'value'
+
+        target_node = target_node.children[name].children['m_GameObject']
+        base_index = target_node.hierarchy_index
+
+        node_list = LinkedList[UnityResourceNode](target_node)  # 忽略掉PlayableDirector和Animator的所有属性
+
+        while node_list.head:
+            head = node_list.remove()
+            node_list.adds(head.hierarchy_children)
+            hierarchy_path = '/'.join(head.hierarchy[base_index:])
+            result[util.compute_unity_hash(hierarchy_path)] = (
+                hierarchy_path,
+                head
+            )
+        return result
 
     def _process_generic_bindings(self, generic_bindings, node):
         """
@@ -29,44 +55,46 @@ class Timeline(ContainerObject):
         :return: list[{'node','property','isPPtrCurve','curve'}]
         """
         info_json_manager = self.parent_container.info_json_manager
-        game_object_dict = self.parent_container.container_objects[0]  # GameObject
+        game_object_dict = self.game_object_container
         nodes_dict = self.parent_container.nodes_dict
         dependencies = node.dependencies
         generics = generic_bindings.genericBindings
         bindings = []
+        hash_dict = Timeline._get_hash_dict(node)
         for item in generics:
-            script = item.script
-            data = {}
-
-            type_name = infoJsonManager.InfoJsonManger.get_class_type(item.typeID)
-            path = game_object_dict.get_path(item.path)
-            data['gameObject'] = path.get_identification()
-            if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象
-                file_id = script.m_FileID
-                identification = (node.cab if file_id == 0 else dependencies[file_id - 1]) + str(path_id)
-                data['node'] = nodes_dict[identification]
-            else:
-                data = {}
-
-                if item.typeID == ClassIDType.GameObject:
-                    data['node'] = path
-                else:
-                    for node in path.children.values():
-                        if node.type == type_name:
-                            data['node'] = node
-                            break
-
-            if (tmp := info_json_manager.get_property_name(type_name, item.attribute)) is None:
-                util.CLogging.error(f'Unknown property hash{item.attribute}, {type_name}')
-            data['property'] = tmp
-            data['isPPtrCurve'] = item.isPPtrCurve != 0
-            data['curve'] = []
-            bindings.append(data)
-        # generic_bindings['genericBindings'] = bindings
-        return {
-            'pptrCurveMapping': generic_bindings.pptrCurveMapping,
-            'genericBindings': bindings
-        }
+            pass
+        #     script = item.script
+        #     data = {}
+        #
+        #     type_name = inverse_map[str(item.typeID)]
+        #     #  path = game_object_dict.get_path(item.path)
+        #     data['gameObject'] = path.get_identification()
+        #     if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象
+        #         file_id = script.m_FileID
+        #         identification = (node.cab if file_id == 0 else dependencies[file_id - 1]) + str(path_id)
+        #         data['node'] = nodes_dict[identification]
+        #     else:
+        #         data = {}
+        #
+        #         if item.typeID == ClassIDType.GameObject:
+        #             data['node'] = path
+        #         else:
+        #             for node in path.children.values():
+        #                 if node.type == type_name:
+        #                     data['node'] = node
+        #                     break
+        #
+        #     if (tmp := info_json_manager.get_property_name(type_name, item.attribute)) is None:
+        #         util.CLogging.error(f'Unknown property hash{item.attribute}, {type_name}')
+        #     data['property'] = tmp
+        #     data['isPPtrCurve'] = item.isPPtrCurve != 0
+        #     data['curve'] = []
+        #     bindings.append(data)
+        # # generic_bindings['genericBindings'] = bindings
+        # return {
+        #     'pptrCurveMapping': generic_bindings.pptrCurveMapping,
+        #     'genericBindings': bindings
+        # }
 
     @staticmethod
     def _parse_streamed_clip(streamed, generic_bindings):
@@ -110,13 +138,15 @@ class Timeline(ContainerObject):
         return generic_bindings
 
     def process(self):
+        self.game_object_container = self.parent_container.container_objects['GameObject']
+        spine_container = self.parent_container.container_objects['SpineClips']
+
         if len(self.nodes) != 1:
             util.CLogging.error('Error for unexpected number of timeline objects')
         node = self.nodes[0]
         nodes_dict = self.parent_container.nodes_dict
-        game_object_container = self.parent_container.container_objects[0]  # GameObject
         for name, _node in node.children.items():
-            if _node.name.startswith('Ani'):  # Animation Track,读取直接子级的AnimationClip
+            if _node.name.startswith('Ani'):  # Animation Track
                 data = {
                     'loop': _node.obj.mInfiniteClipLoop
                 }
@@ -161,7 +191,6 @@ class Timeline(ContainerObject):
 
             elif _node.name.startswith('Spine'):
                 data = self.data['spineAnimation']
-                spine_container = self.parent_container.container_objects[1]  # SpineClips
                 node_obj = _node.obj
                 for clip in node_obj.m_Clips:
                     clip_data = {
@@ -197,4 +226,3 @@ class Timeline(ContainerObject):
 
     def save_data(self, base_path):
         base_path.mkdir(parents=True, exist_ok=True)
-

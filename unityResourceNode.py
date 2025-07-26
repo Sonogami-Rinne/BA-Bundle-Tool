@@ -12,7 +12,14 @@ from fileManager import FileManager
 
 class UnityResourceNode:
 
-    def __init__(self, target_info: tuple, file_manager: FileManager, info_json_manager: InfoJsonManger):
+    def __init__(self, target_info: tuple, file_manager: FileManager, info_json_manager: InfoJsonManger, root=False):
+        """
+        :param target_info: (cab, path_id, type_id, name)
+        :param file_manager:
+        :param info_json_manager:
+        :param root:
+        """
+        self.root = root
         self.cab = target_info[0]
         self.path_id = target_info[1]
         self.type = target_info[2]
@@ -24,13 +31,17 @@ class UnityResourceNode:
         self.obj = None
         self.parents: dict[str:UnityResourceNode] = {}
         self.children: dict[str:UnityResourceNode] = {}
-        self.next = None  # 用于链表
         self.dependencies = None
 
         self.process_data = None  # Transform,GameObject的变化矩阵的存储
-        self.hierarchy_path = self.name if self.type == ClassIDType.GameObject else None  # GameObject的路径
         self.transform = None  # gameObject的Transform节点，由于经常用到，故单独记录
-        # self.hash_reference = {}
+        self.game_object = None
+        # self.father = None
+
+        self.hierarchy = None  # GameObject的层级路径
+        self.hierarchy_index = None  # 当前对象在相对于root的绝对路径中的位置(tuple的index)
+        self.hierarchy_children = None  # 用于遍历其子级GameObject,以计算hash
+        self.hierarchy_parent = None  # Transform连接两GameObject设置children的参照
 
     def __str__(self):
         return self.get_identification()
@@ -53,9 +64,16 @@ class UnityResourceNode:
             self.info_json_manager.add_dependencies(self.cab, dependencies)
         self.dependencies = dependencies
 
+        if self.type == ClassIDType.GameObject:
+            self.hierarchy_children = []
+            self.hierarchy_index = 0
+
+            if self.root:
+                self.hierarchy = (self.name,)
+
         return True
 
-    def get_node(self, ignore_identification=True):
+    def get_node(self):
         """
         pyvis构建network所需的当前节点的信息
         :return: (节点标识， 节点名， 节点颜色， 节点信息)
@@ -64,9 +82,11 @@ class UnityResourceNode:
         type_name = inverse_map[str(self.type)]
         if util.SAVE_RESOURCE_CLASS_DICT:
             data = util.get_data_from_obj(self.obj)
-        return (self.name, '#000000', data if util.SAVE_RESOURCE_CLASS_DICT else type_name) \
-            if ignore_identification else (self.cab + str(self.path_id), self.name, '#000000',
-                                           data if util.SAVE_RESOURCE_CLASS_DICT else type_name)
+        return (
+            self.name,
+            '#000000' if self.root else self.info_json_manager.get_color(self.type),
+            data if util.SAVE_RESOURCE_CLASS_DICT else type_name
+        )
 
     def get_identification(self):
         return self.cab + str(self.path_id)
@@ -77,8 +97,8 @@ class UnityResourceNode:
         :return:(目标节点标识, 边名)
         """
         return [
-            (identification[0] + str(identification[1]), property_path)
-            for property_path, identification in self.references.items()
+            (node.get_identification(), property_path)
+            for property_path, node in self.children.items()
         ]
 
     def __walk_through__(self, obj, parent):
@@ -94,44 +114,46 @@ class UnityResourceNode:
         if isinstance(obj, dict):
             if (path_id := obj.get('m_PathID')) is not None:
                 if path_id != 0:
-                    if (file_id := obj['m_FileID']) is None:
-                        CLogging.warn('Error, object do not own file_id while owing path_id.Target:')
-                        CLogging.warn(json.dumps(obj, indent=2, ensure_ascii=False))
+                    if (file_id := obj.get('m_FileID')) is None:
+                        CLogging.error('Error, object do not own file_id while owing path_id.Target:')
+                        CLogging.error(json.dumps(obj, indent=2, ensure_ascii=False))
                     else:
                         self.references[parent] = (
                             self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)
                 return  # 只要有m_PathID就可以提前结束
             else:
                 for name, value in obj.items():
-                    if isinstance(obj, (dict, list)):
-                        self.__walk_through__(value, parent_ + name)
+                    if isinstance(value, (dict, list, tuple)):
+                        self.__walk_through__(value, f'{parent_}{name}')
         elif isinstance(obj, list) and (length := len(obj)) > 0:
             if isinstance((obj[0]), (str, int, float, bool)):
                 return
             for index in range(length):
-                self.__walk_through__(obj[index], parent_ + str(index))
+                self.__walk_through__(obj[index], f'{parent_}{index}')
         elif isinstance(obj, tuple):
             #  emm,目前只看到一个两元素的tuple有PPtr
-            if len(obj) == 2:
-                self.__walk_through__(obj[1], parent_ + obj[0])
-        else:
-            CLogging.warn(f'Ignored object type: {obj.__class__.__name__}')
+            if len(obj) == 2 and not isinstance(obj[1], (int, float, str, bool)):
+                self.__walk_through__(obj[1], f'{parent_}{obj[0]}')
 
-    def walk_through(self):
+    def walk_through(self) -> dict[str, tuple[str, int]]:
         """
-        遍历属性以获取引用。其实应该遍历object_reader.read_typetree的结果字典的
-        :return:
+        遍历属性以获取引用
+        :return:dict[attr_path : (cab, path_id)]
         """
-        self.__walk_through__(self.obj.object_reader.read_typetree(), None)
+        self.__walk_through__(self.obj.object_reader.read_typetree(), '')
         return self.references
 
     def add_child(self, attr_path, node):
         self.children[attr_path] = node
         node.parents[attr_path] = self
-        if self.hierarchy_path:
+
+        if self.type == ClassIDType.GameObject:
             if node.type == ClassIDType.Transform:
-                node.hierarchy_path = self.hierarchy_path
-                if self.type == ClassIDType.GameObject:
-                    self.transform = node
-            elif node.type == ClassIDType.GameObject:
-                node.hierarchy_path = f'{self.hierarchy_path}/{node.hierarchy_path}'
+                self.transform = node
+                node.game_object = self
+
+        elif self.type == ClassIDType.Transform:
+            if node.type == ClassIDType.GameObject:
+                self.game_object = node
+                node.transform = self
+
