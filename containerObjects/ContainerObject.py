@@ -34,5 +34,15 @@ class ContainerObject:
         with open(os.path.join(base_path, self.__class__.__name__ + '.json'), 'w+', encoding='utf-8') as f:
             json.dump(self.data, f, indent=2)
 
+        self.clear()
+
     def get_index(self, identification):
-        return self.data_keys.index(identification)
+        try:
+            return self.data_keys.index(identification)
+        except ValueError:
+            return None
+
+    def clear(self):
+        self.data.clear()
+        self.data_keys.clear()
+        self.nodes.clear()

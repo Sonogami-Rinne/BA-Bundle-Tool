@@ -10,9 +10,9 @@ class HashInfoRecorder(Recorder):
     """
 
     def notify_single(self, node):
-        if (target := self.batch_data.get(inverse_map[str(node.type)])) is None:
+        if (target := self.batch_data.get(node.type)) is None:
             target = {}
-            self.batch_data[inverse_map[str(node.type)]] = target
+            self.batch_data[node.type] = target
 
         if len(target) == 0 or node.type == ClassIDType.MonoBehaviour:
             for name, value in node.obj.object_reader.read_typetree().items():

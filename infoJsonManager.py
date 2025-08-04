@@ -10,7 +10,7 @@ class InfoJsonManger:
     def __init__(self):
         self.cab2bundle_json = {}
         self.cab_path_json = {}
-        self.property_hash = {}
+        # self.property_hash = {}
         self.dependencies = {}
         self.colors = {}
         # self.path_hash = {}
@@ -27,12 +27,12 @@ class InfoJsonManger:
         else:
             CLogging.error('Base info not found.Use generate_baseInfo.py first')
 
-        path = pathlib.Path("save\\recorder\\HashInfoRecorder\\hash.json")
-        if path.exists():
-            with open(path, 'r', encoding='utf-8') as f:
-                self.property_hash = json.load(f)
-        else:
-            CLogging.warn('Hash info json not found')
+        # path = pathlib.Path("save\\recorder\\HashInfoRecorder\\hash.json")
+        # if path.exists():
+        #     with open(path, 'r', encoding='utf-8') as f:
+        #         self.property_hash = json.load(f)
+        # else:
+        #     CLogging.warn('Hash info json not found')
 
     def get_path_info(self, cab_name, path_id) -> dict or None:
         if not cab_name.startswith('c'):  # unity default resources
@@ -60,9 +60,9 @@ class InfoJsonManger:
             first = next(iter(self.dependencies))
             self.dependencies.pop(first)
 
-    def get_property_name(self, type_name, property_hash):
-        tmp = self.property_hash[type_name].get(str(property_hash))
-        return tmp
+    # def get_property_name(self, type_name, property_hash):
+    #     tmp = self.property_hash[type_name].get(str(property_hash))
+    #     return tmp
 
     def get_color(self, type_id):
         if self.colors.get(type_id) is None:

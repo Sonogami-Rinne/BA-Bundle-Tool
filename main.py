@@ -72,17 +72,21 @@ def run_files_in_single_bundle(bundle):
 
             container.notify_bulk(cur_file[0])
             recorder.notify_bulk(cur_file[0])
+            node_dict.clear()
 
 
 def run_files_in_prefabs(bundle):
     for cab_name, path_id, obj in util.env_load_prefabs(bundle):
         file_name = getattr(obj, 'm_Name')
         cur_file[0] = file_name
+        # if '0238' not in file_name:
+        #     continue
         util.CLogging.info(f'当前:{cur_file[0]}')
         single((cab_name, path_id, ClassIDType.GameObject, file_name))
 
         container.notify_bulk(cur_file[0])
         recorder.notify_bulk(cur_file[0])
+        node_dict.clear()
 
 
 def run_bundles(bundle_filter, bulk_fnc):

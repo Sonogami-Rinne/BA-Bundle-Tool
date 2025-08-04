@@ -37,7 +37,7 @@ class Container:
             i.process()
 
         for i in self.container_objects.values():
-            i.save_data(pathlib.Path(os.path.join('container', stu)))
+            i.save_data(pathlib.Path(os.path.join('save','container', stu)))
 
     #  只是为了和Recorder保持一致。下同
     def notify_bundle(self, bundle):

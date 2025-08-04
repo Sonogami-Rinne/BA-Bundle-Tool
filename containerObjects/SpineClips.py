@@ -1,3 +1,5 @@
+import os
+
 from containerObjects.ContainerObject import ContainerObject
 
 
@@ -10,6 +12,7 @@ class SpineClips(ContainerObject):
             'skeletons': [],
             'clips': [],
         }
+        self.audios = {}
 
     def process(self):
         self.clip_keys = list(self.nodes.keys())
@@ -23,7 +26,8 @@ class SpineClips(ContainerObject):
                 self.skeleton_keys.append(skeleton_name)
                 self.data['skeletons'].append({
                     'defaultMix': skeleton_node.obj.defaultMix,
-                    'scale': skeleton_node.obj.scale
+                    'scale': skeleton_node.obj.scale,
+                    'filename': skeleton_node.children['skeletonJSON'].name
                 })
             else:
                 skeleton_index = self.skeleton_keys.index(skeleton_name)
@@ -49,12 +53,38 @@ class SpineClips(ContainerObject):
             for i in node_obj.SoundKeys:
                 target = i.Event
                 file_id = target.m_FileID
-                identification = (node.cab if file_id == 0 else node.dependencies[file_id - 1]) + str(target.m_PathID)
-                target = nodes_dict[identification].obj
-                sound_keys.append({
+                iden = (node.cab if file_id == 0 else node.dependencies[file_id - 1]) + str(target.m_PathID)
+                target = nodes_dict[iden]
+                target_obj = target.obj
+
+                sub_item = {
                     'time': i.Time,
-                    'audio': target
-                })
+                    'prefix': target.name,
+                    'loop': target_obj.AudioData.Loop,
+                    'volume': target_obj.AudioData.Volume
+                }
+
+                audios = []
+                self.audios[target.name] = []
+                for audio in target_obj.AudioData.AudioClips:
+                    if audio.m_PathID != 0:
+                        iden = (target.dependencies[audio.m_FileID - 1] if audio.m_FileID != 0 else target.cab) + str(audio.m_PathID)
+                        if _target := nodes_dict.get(iden):
+                            self.audios[target.name].append(_target)
+                            audios.append(_target.name)
+
+                sub_item['audios'] = audios
+
+
+
+
+                # if target.name not in self.audios:
+                #     self.audios[target.name] = target
+
+                # sound_keys.append({
+                #     'time': i.Time,
+                #     'audio': target.name
+                # })
             tmp['soundKeys'] = sound_keys
             self.data['clips'].append(tmp)
 
@@ -66,3 +96,26 @@ class SpineClips(ContainerObject):
 
     def get_index(self, identification):
         return self.clip_keys.index(identification)
+
+    def save_data(self, base_path):
+        for prefix, audios in self.audios.items():
+            for audio in audios:
+                for sample_name, sample_data in audio.obj.samples.items():
+                    with open(os.path.join(base_path, prefix + '-' + sample_name), 'wb+') as f:
+                        f.write(sample_data)
+        # for audio in self.audios:
+        #     for sample_name, sample_data in audio.obj.samples.items():
+        #         with open(os.path.join(base_path, sample_name), 'wb+') as f:
+        #             f.write(sample_data)
+        super().save_data(base_path)
+
+    def clear(self):
+        super().clear()
+        self.audios.clear()
+        self.clip_keys.clear()
+        self.skeleton_keys.clear()
+        self.data = {
+            'skeletons': [],
+            'clips': [],
+        }
+

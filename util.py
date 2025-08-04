@@ -155,6 +155,24 @@ def compose_transform_matrix(translation, quaternion, scale):
 
     return transform_matrix
 
+def decompose_2d_transform(matrix_4x4):
+    """
+    从 4x4 变换矩阵提取 2D 变换参数（忽略 z 轴）
+    :param matrix_4x4: 4x4 变换矩阵（3D 齐次坐标）
+    :return: (tx, ty), theta, (sx, sy)
+    """
+    # 提取 2D 平移
+    tx, ty = matrix_4x4[0, 3], matrix_4x4[1, 3]
+
+    # 提取 2D 旋转角度 θ（弧度）
+    theta = np.arctan2(matrix_4x4[1, 0], matrix_4x4[0, 0])
+
+    # 提取 2D 缩放（去除旋转影响）
+    sx = np.sqrt(matrix_4x4[0, 0]**2 + matrix_4x4[1, 0]**2)
+    sy = np.sqrt(matrix_4x4[0, 1]**2 + matrix_4x4[1, 1]**2)
+
+    return (tx, ty), theta, (sx, sy)
+
 
 def get_transform(base_node):
     """

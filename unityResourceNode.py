@@ -36,12 +36,10 @@ class UnityResourceNode:
         self.process_data = None  # Transform,GameObject的变化矩阵的存储
         self.transform = None  # gameObject的Transform节点，由于经常用到，故单独记录
         self.game_object = None
-        # self.father = None
 
-        self.hierarchy = None  # GameObject的层级路径
-        self.hierarchy_index = None  # 当前对象在相对于root的绝对路径中的位置(tuple的index)
-        self.hierarchy_children = None  # 用于遍历其子级GameObject,以计算hash
-        self.hierarchy_parent = None  # Transform连接两GameObject设置children的参照
+        self.hierarchy = None
+        self.hierarchy_children = None
+        # self.father = None
 
     def __str__(self):
         return self.get_identification()
@@ -63,13 +61,6 @@ class UnityResourceNode:
                 ]
             self.info_json_manager.add_dependencies(self.cab, dependencies)
         self.dependencies = dependencies
-
-        if self.type == ClassIDType.GameObject:
-            self.hierarchy_children = []
-            self.hierarchy_index = 0
-
-            if self.root:
-                self.hierarchy = (self.name,)
 
         return True
 
@@ -115,8 +106,7 @@ class UnityResourceNode:
             if (path_id := obj.get('m_PathID')) is not None:
                 if path_id != 0:
                     if (file_id := obj.get('m_FileID')) is None:
-                        CLogging.error('Error, object do not own file_id while owing path_id.Target:')
-                        CLogging.error(json.dumps(obj, indent=2, ensure_ascii=False))
+                        CLogging.warn('Warn, object do not own file_id while owing path_id.')
                     else:
                         self.references[parent] = (
                             self.cab if file_id == 0 else self.dependencies[file_id - 1], path_id)

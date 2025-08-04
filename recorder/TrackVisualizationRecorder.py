@@ -19,18 +19,6 @@ class TrackVisualizationRecorder(Recorder):
         self.nodes = []
         self._clear()
 
-    # def add_hash_info(self, timeline_container):
-    #     """
-    #     从TimelineContainer那里获取hash信息并加入边。
-    #     :param timeline_container:
-    #     :return:
-    #     """
-    #     clips = timeline_container.data['animationClip']
-    #     for clip in clips:
-    #         clip_data = clip['data']
-    #         for pptr in clip_data['pptrCurvingMapping']:
-    #
-
     def notify_single(self, node):
         self.nodes.append(node)
         pass
