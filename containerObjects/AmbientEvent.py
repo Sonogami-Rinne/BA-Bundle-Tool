@@ -1,5 +1,6 @@
 import json
 import os
+import pathlib
 
 from containerObjects.ContainerObject import ContainerObject
 
@@ -24,13 +25,15 @@ class AmbientEvent(ContainerObject):
         return False
 
     def save_data(self, base_path):
-        base_path.mkdir(parents=True, exist_ok=True)
+        _path = os.path.join(base_path, 'audio', 'other')
+        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
+        # base_path.mkdir(parents=True, exist_ok=True)
         if len(self.data) > 0:  # 估计只会有一个
             item = self.data[0]
             audio_obj = item['audio']
             item.pop('audio')
             for name, data in audio_obj.samples.items():
-                with open(os.path.join(base_path, 'ambient-' + name), 'wb+') as f:
+                with open(os.path.join(_path, 'ambient-' + name), 'wb+') as f:
                     f.write(data)
             with open(os.path.join(base_path, 'ambient-config.json'), 'w+', encoding='utf-8') as f:
                 json.dump(item, f, indent=2)

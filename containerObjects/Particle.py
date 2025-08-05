@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 import util
 from containerObjects.ContainerObject import ContainerObject
@@ -557,11 +558,16 @@ class Particle(ContainerObject):
             self.nodes[node.get_identification()] = node
 
     def save_data(self, base_path):
+        _path = os.path.join(base_path, 'mesh')
+        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         for mesh in self.meshes:
-            with open(os.path.join(base_path, mesh.name + '.obj'), 'wt', newline='') as f:
+            with open(os.path.join(_path, mesh.name + '.obj'), 'wt', newline='') as f:
                 f.write(mesh.obj.export())
+
+        _path = os.path.join(base_path, 'image')
+        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         for tex in self.textures:
-            path = os.path.join(base_path, f"{tex.name}.png")
+            path = os.path.join(_path, f"{tex.name}.png")
             tex.obj.image.save(path)
 
         super().save_data(base_path)

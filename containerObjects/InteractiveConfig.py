@@ -26,18 +26,7 @@ class InteractiveConfig(ContainerObject):
             result['end'] = spine_container.get_index(_out.get_identification())
         else:
             util.CLogging.error('EndClip missing !')
-        # return {
-        #     'offset': to_tuple(obj.BoneCenterOffset),
-        #     'followDragSpeed': obj.FollowDragSpeed01,
-        #     'followReleaseSpeed': obj.FollowReleaseSpeed01,
-        #     'bounds': (obj.MinLocalPos.x, obj.MinLocalPos.y, obj.MaxLocalPos.x, obj.MaxLocalPos.y),
-        #     'initPos': (obj.OrigLocalPos.x, obj.OrigLocalPos.y),
-        #     'delay': obj.TriggerDelay,
-        #     # 'in': item.children['IngClip'].get_identification(),
-        #     # 'end': item.children['EndClip'].get_identification()
-        #     # 'in': spine_container.get_index(item.children['IngClip'].get_identification()),
-        #     # 'end': spine_container.get_index(item.children['EndClip'].get_identification())
-        # }
+
         return result
 
     def process(self):

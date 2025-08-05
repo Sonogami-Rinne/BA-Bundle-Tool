@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 from containerObjects.ContainerObject import ContainerObject
 
@@ -22,13 +23,33 @@ class SpineClips(ContainerObject):
             skeleton_name = skeleton_node.children['skeletonJSON'].name
             # if (skeleton_index := self.skeleton_keys.index(skeleton_name)) < 0:
             if skeleton_name not in self.skeleton_keys:
+                atlas = []
+                # self.skeletons.append(node.children['skeletonJSON'])
+                for _name, _node in skeleton_node.children.items():
+                    if _name.startswith('atlasAssets'):
+                        atlas_item = {
+                            'atlas': _node.children['atlasFile']
+                        }
+                        # self.atlas.append(_node.children['atlasFile'])
+                        textures = []
+                        for _mat_name, _mat in _node.children.items():
+                            if _mat_name.startswith('materials'):
+                                for _tex_name, _tex_node in _mat.children.items():
+                                    if _tex_name.startswith('m_SavedProperties'):
+                                        textures.append(_tex_node)
+
+                        atlas_item['textures'] = textures
+                        atlas.append(atlas_item)
+
                 skeleton_index = len(self.skeleton_keys)
                 self.skeleton_keys.append(skeleton_name)
                 self.data['skeletons'].append({
                     'defaultMix': skeleton_node.obj.defaultMix,
                     'scale': skeleton_node.obj.scale,
-                    'filename': skeleton_node.children['skeletonJSON'].name
+                    'skeleton': skeleton_node.children['skeletonJSON'],
+                    'atlas': atlas
                 })
+
             else:
                 skeleton_index = self.skeleton_keys.index(skeleton_name)
 
@@ -75,16 +96,6 @@ class SpineClips(ContainerObject):
 
                 sub_item['audios'] = audios
 
-
-
-
-                # if target.name not in self.audios:
-                #     self.audios[target.name] = target
-
-                # sound_keys.append({
-                #     'time': i.Time,
-                #     'audio': target.name
-                # })
             tmp['soundKeys'] = sound_keys
             self.data['clips'].append(tmp)
 
@@ -98,15 +109,39 @@ class SpineClips(ContainerObject):
         return self.clip_keys.index(identification)
 
     def save_data(self, base_path):
+        _path = os.path.join(base_path, 'audios', 'other')
+        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         for prefix, audios in self.audios.items():
             for audio in audios:
                 for sample_name, sample_data in audio.obj.samples.items():
-                    with open(os.path.join(base_path, prefix + '-' + sample_name), 'wb+') as f:
+                    with open(os.path.join(_path, prefix + '-' + sample_name), 'wb+') as f:
                         f.write(sample_data)
         # for audio in self.audios:
         #     for sample_name, sample_data in audio.obj.samples.items():
         #         with open(os.path.join(base_path, sample_name), 'wb+') as f:
         #             f.write(sample_data)
+        for skeleton in self.data['skeletons']:
+            target = skeleton['skeleton']
+            with open(os.path.join(base_path, target.name), 'wb+') as f:
+                f.write(target.obj.m_Script)
+            skeleton['skeleton'] = target.name
+
+            target = skeleton['atlas']
+
+            for atlas in target:
+                atlas_node = atlas['atlas']
+                with open(os.path.join(base_path, atlas_node.name), 'wb+') as f:
+                    f.write(atlas_node.obj.m_Script)
+
+                atlas['atlas'] = atlas_node.name
+
+                textures = atlas['textures']
+
+                for i in range(len(textures)):
+                    textures[i].obj.image.save(os.path.join(base_path, 'image', textures[i].name + 'png'))
+                    textures[i] = textures[i].name
+                    # with open(os.path.join(base_path, 'atlas_img', textures[i].name), 'w')
+
         super().save_data(base_path)
 
     def clear(self):

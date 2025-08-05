@@ -1,6 +1,7 @@
 import io
 import math
 import os
+import pathlib
 import struct
 
 import util
@@ -346,9 +347,11 @@ class Timeline(ContainerObject):
         }
 
     def save_data(self, base_path):
+        _path = os.path.join(base_path, 'audio')
+        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         for audio in self.audios:
             for name, data in audio.obj.samples.items():
-                with open(os.path.join(base_path, name), 'wb+') as f:
+                with open(os.path.join(_path, name), 'wb+') as f:
                     f.write(data)
         super().save_data(base_path)
 

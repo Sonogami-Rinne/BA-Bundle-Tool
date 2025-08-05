@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 import util
 from containerObjects.ContainerObject import ContainerObject
@@ -56,10 +57,12 @@ class SpriteRender(ContainerObject):
             self.data_keys.append(node.get_identification())
 
     def save_data(self, base_path):
+        _path = os.path.join(base_path, 'image')
+        pathlib.Path(_path).mkdir(exist_ok=True, parents=True)
         for sprite in self.sprites:
             obj = sprite.obj
             save_name = sprite.name + '.png' if not sprite.name.endswith('png') else sprite.name
-            obj.image.save(os.path.join(base_path, save_name))
+            obj.image.save(os.path.join(_path, save_name))
         super().save_data(base_path)
 
     def clear(self):
