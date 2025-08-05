@@ -140,12 +140,36 @@ class Particle(ContainerObject):
 
     @staticmethod
     def process_min_max_gradient(obj):
-        return {
-            'maxColor': util.to_tuple(obj.maxColor),
-            'minColor': util.to_tuple(obj.minColor),
-            'maxGradient': Particle.process_gradient(obj.maxGradient),
-            'minGradient': Particle.process_gradient(obj.minGradient)
-        }
+        state = obj.minMaxState
+        if state == 0:
+            return {
+                'state': 0,
+                'color': util.to_tuple(obj.maxColor)
+            }
+        elif state == 1:
+            return {
+                'state': 1,
+                'gradient': Particle.process_gradient(obj.maxGradient)
+            }
+        elif state == 2:
+            return {
+                'state': 2,
+                'minColor': util.to_tuple(obj.minColor),
+                'maxColor': util.to_tuple(obj.maxColor),
+            }
+        else:
+            return{
+                'state': 3,
+                'minGradient': Particle.process_gradient(obj.minGradient),
+                'maxGradient': Particle.process_gradient(obj.maxGradient),
+            }
+        # return {
+        #     'maxColor': util.to_tuple(obj.maxColor),
+        #     'minColor': util.to_tuple(obj.minColor),
+        #     'maxGradient': Particle.process_gradient(obj.maxGradient),
+        #     'minGradient': Particle.process_gradient(obj.minGradient),
+        #     'minMaxState': obj.minMaxState
+        # }
 
     @staticmethod
     def process_animation_curve(obj):
@@ -231,8 +255,8 @@ class Particle(ContainerObject):
         data = {}
         nodes_dict = self.parent_container.nodes_dict
         #  忽略的模块
-        for module_name in ('CollisionModule', 'CustomDataModule', 'ExternalForcesModule', 'ForceModule',
-                            'InheritVelocityModule', 'LightsModule', 'SubModule', 'TrailModule', 'TriggerModule'):
+        for module_name in ('CollisionModule', 'ExternalForcesModule', 'InheritVelocityModule', 'LightsModule',
+                            'SubModule', 'TrailModule', 'TriggerModule'):
             sub_module = getattr(obj, module_name)
             if sub_module.enabled:
                 util.CLogging.warn(f'Ignored module {module_name}')
@@ -250,6 +274,26 @@ class Particle(ContainerObject):
         if sub_module.enabled:
             data['colorModule'] = Particle.process_min_max_gradient(sub_module.gradient)
 
+        # 自定义数据模块
+        sub_module = obj.CustomModule
+        if sub_module.enabled:
+            data['customModule'] = {
+                'color0': Particle.process_min_max_gradient(sub_module.color0),
+                'color1': Particle.process_min_max_gradient(sub_module.color1),
+                'mode0': sub_module.mode0,
+                'mode1': sub_module.mode1,
+                'vector0_0': Particle.process_min_max_curve(sub_module.vector0_0),
+                'vector0_1': Particle.process_min_max_curve(sub_module.vector0_1),
+                'vector0_2': Particle.process_min_max_curve(sub_module.vector0_2),
+                'vector0_3': Particle.process_min_max_curve(sub_module.vector0_3),
+                'vector1_0': Particle.process_min_max_curve(sub_module.vector1_0),
+                'vector1_1': Particle.process_min_max_curve(sub_module.vector1_1),
+                'vector1_2': Particle.process_min_max_curve(sub_module.vector1_2),
+                'vector1_3': Particle.process_min_max_curve(sub_module.vector1_3),
+                'vector0': sub_module.vectorComponentCount0,
+                'vector1': sub_module.vectorComponentCount1,
+            }
+
         #  发射器模块
         sub_module = obj.EmissionModule
         data['emissionModule'] = {
@@ -265,6 +309,14 @@ class Particle(ContainerObject):
                 } for i in sub_module.m_Bursts
             ]
         }
+
+        # 力模块
+        sub_module = obj.ForceModule
+        if sub_module.enabled:
+            data['forceModule'] = {
+                'x': Particle.process_min_max_curve(sub_module.x),
+                'y': Particle.process_min_max_curve(sub_module.y),
+            }
 
         #  初始化模块
         sub_module = obj.InitialModule
