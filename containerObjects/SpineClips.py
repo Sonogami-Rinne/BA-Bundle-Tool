@@ -47,7 +47,7 @@ class SpineClips(ContainerObject):
 
                 game_object = None
 
-                for _name, _node in skeleton_node.parents.items():
+                for _name, _node in skeleton_node.parents:
                     if _name.startswith('skeletonDataAsset') and 'm_GameObject' in _node.children:
                         game_object = _node.children['m_GameObject']
 

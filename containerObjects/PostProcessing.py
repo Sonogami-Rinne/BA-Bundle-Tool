@@ -55,9 +55,17 @@ class PostProcessing(ContainerObject):
                     if return_data is not None:
                         data[attr_name] = return_data
 
-                        data['gameObject'] = game_object_container.get_index(
-                            node.parents['sharedProfile'].children['m_GameObject'].get_identification()
-                        )
+                        flag = False
+                        for _name, _node in node.parents:
+                            if _name == 'sharedProfile':
+                                flag = True
+                                break
+
+                        assert flag
+                        data['gameObject'] = game_object_container.get_index(_node.children['m_GameObject'].get_identification())
+                        # data['gameObject'] = game_object_container.get_index(
+                        #     node.parents['sharedProfile'].children['m_GameObject'].get_identification()
+                        # )
 
             if len(data) > 0:
                 self.data.append(data)

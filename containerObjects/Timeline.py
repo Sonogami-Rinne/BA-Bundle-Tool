@@ -41,7 +41,7 @@ class Timeline(ContainerObject):
     def _get_hash_dict(node):
         result = {}
         flag = False
-        for name, target_node in node.parents.items():
+        for name, target_node in node.parents:
             if name.endswith('key'):
                 flag = True
                 break

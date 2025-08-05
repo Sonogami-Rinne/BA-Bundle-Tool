@@ -29,7 +29,7 @@ class UnityResourceNode:
         self.bundle = info_json_manager.get_bundle_name(self.cab)
         self.references = {}
         self.obj = None
-        self.parents: dict[str:UnityResourceNode] = {}
+        self.parents: list[tuple[str, UnityResourceNode]] = []
         self.children: dict[str:UnityResourceNode] = {}
         self.dependencies = None
 
@@ -135,7 +135,7 @@ class UnityResourceNode:
 
     def add_child(self, attr_path, node):
         self.children[attr_path] = node
-        node.parents[attr_path] = self
+        node.parents.append((attr_path, self))
 
         if self.type == ClassIDType.GameObject:
             if node.type == ClassIDType.Transform:
