@@ -11,6 +11,7 @@ from containerObjects.PostProcessing import PostProcessing
 from containerObjects.SpineClips import SpineClips
 from containerObjects.SpriteRender import SpriteRender
 from containerObjects.Timeline import Timeline
+from containerObjects.ResourceJS import ResourceJS
 
 
 class Container:
@@ -23,7 +24,8 @@ class Container:
             'SpriteRender': SpriteRender(self),
             'Particle': Particle(self),
             'Timeline': Timeline(self),
-            'AmbientEvent': AmbientEvent(self)
+            'AmbientEvent': AmbientEvent(self),
+            'ResourceJS': ResourceJS(self),
         } if util.CONTAINER_RECORD else {}
         self.info_json_manager: infoJsonManager.InfoJsonManger = info_json_manager
         self.nodes_dict = nodes_dict
