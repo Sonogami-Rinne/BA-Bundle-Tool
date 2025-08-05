@@ -16,6 +16,7 @@ class SpineClips(ContainerObject):
         self.audios = {}
 
     def process(self):
+        game_object_container = self.parent_container.container_objects['GameObject']
         self.clip_keys = list(self.nodes.keys())
         nodes_dict = self.parent_container.nodes_dict
         for _, node in self.nodes.items():
@@ -43,11 +44,21 @@ class SpineClips(ContainerObject):
 
                 skeleton_index = len(self.skeleton_keys)
                 self.skeleton_keys.append(skeleton_name)
+
+                game_object = None
+
+                for _name, _node in skeleton_node.parents.items():
+                    if _name.startswith('skeletonDataAsset') and 'm_GameObject' in _node.children:
+                        game_object = _node.children['m_GameObject']
+
+                assert game_object
+
                 self.data['skeletons'].append({
                     'defaultMix': skeleton_node.obj.defaultMix,
                     'scale': skeleton_node.obj.scale,
                     'skeleton': skeleton_node.children['skeletonJSON'],
-                    'atlas': atlas
+                    'atlas': atlas,
+                    'gameObject': game_object_container.get_index(game_object)
                 })
 
             else:
@@ -142,7 +153,7 @@ class SpineClips(ContainerObject):
 
                 for i in range(len(textures)):
                     textures[i].obj.image.save(os.path.join(base_path, 'image', textures[i].name + '.png'))
-                    textures[i] = textures[i].name
+                    textures[i] = textures[i].name + '.png'
                     # with open(os.path.join(base_path, 'atlas_img', textures[i].name), 'w')
 
         super().save_data(base_path)
