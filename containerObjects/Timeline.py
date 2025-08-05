@@ -347,12 +347,14 @@ class Timeline(ContainerObject):
         }
 
     def save_data(self, base_path):
-        _path = os.path.join(base_path, 'audio')
+        _path = os.path.join(base_path, 'audio', 'other')
         pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         for audio in self.audios:
             for name, data in audio.obj.samples.items():
                 with open(os.path.join(_path, name), 'wb+') as f:
                     f.write(data)
+        _path = os.path.join(base_path, 'audio', 'voice')
+        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         super().save_data(base_path)
 
         # for name, data in audio_obj.samples.items():

@@ -109,13 +109,16 @@ class SpineClips(ContainerObject):
         return self.clip_keys.index(identification)
 
     def save_data(self, base_path):
-        _path = os.path.join(base_path, 'audios', 'other')
+        _path = os.path.join(base_path, 'audio', 'other')
         pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         for prefix, audios in self.audios.items():
             for audio in audios:
                 for sample_name, sample_data in audio.obj.samples.items():
                     with open(os.path.join(_path, prefix + '-' + sample_name), 'wb+') as f:
                         f.write(sample_data)
+
+        _path = os.path.join(base_path, 'image')
+        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         # for audio in self.audios:
         #     for sample_name, sample_data in audio.obj.samples.items():
         #         with open(os.path.join(base_path, sample_name), 'wb+') as f:
@@ -123,14 +126,14 @@ class SpineClips(ContainerObject):
         for skeleton in self.data['skeletons']:
             target = skeleton['skeleton']
             with open(os.path.join(base_path, target.name), 'wb+') as f:
-                f.write(target.obj.m_Script)
+                f.write(target.obj.m_Script.encode("utf-8", "surrogateescape"))
             skeleton['skeleton'] = target.name
 
             target = skeleton['atlas']
 
             for atlas in target:
                 atlas_node = atlas['atlas']
-                with open(os.path.join(base_path, atlas_node.name), 'wb+') as f:
+                with open(os.path.join(base_path, atlas_node.name), 'w+') as f:
                     f.write(atlas_node.obj.m_Script)
 
                 atlas['atlas'] = atlas_node.name
@@ -138,7 +141,7 @@ class SpineClips(ContainerObject):
                 textures = atlas['textures']
 
                 for i in range(len(textures)):
-                    textures[i].obj.image.save(os.path.join(base_path, 'image', textures[i].name + 'png'))
+                    textures[i].obj.image.save(os.path.join(base_path, 'image', textures[i].name + '.png'))
                     textures[i] = textures[i].name
                     # with open(os.path.join(base_path, 'atlas_img', textures[i].name), 'w')
 

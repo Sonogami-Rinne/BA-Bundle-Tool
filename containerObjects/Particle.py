@@ -275,9 +275,9 @@ class Particle(ContainerObject):
             data['colorModule'] = Particle.process_min_max_gradient(sub_module.gradient)
 
         # 自定义数据模块
-        sub_module = obj.CustomModule
+        sub_module = obj.CustomDataModule
         if sub_module.enabled:
-            data['customModule'] = {
+            data['customDataModule'] = {
                 'color0': Particle.process_min_max_gradient(sub_module.color0),
                 'color1': Particle.process_min_max_gradient(sub_module.color1),
                 'mode0': sub_module.mode0,

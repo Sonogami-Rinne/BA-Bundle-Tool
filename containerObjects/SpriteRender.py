@@ -61,7 +61,7 @@ class SpriteRender(ContainerObject):
         pathlib.Path(_path).mkdir(exist_ok=True, parents=True)
         for sprite in self.sprites:
             obj = sprite.obj
-            save_name = sprite.name + '.png' if not sprite.name.endswith('png') else sprite.name
+            save_name = sprite.name + '.png' if not sprite.name.endswith('.png') else sprite.name
             obj.image.save(os.path.join(_path, save_name))
         super().save_data(base_path)
 
