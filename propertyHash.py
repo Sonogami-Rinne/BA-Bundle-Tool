@@ -15,11 +15,22 @@ pre_hash_dict = {
             'm_LocalPosition.y',
             'm_LocalPosition.z'
         ],
-        3: [  # 这个3只是我推测出来的，在AssetRipper项目中似乎直接跳过了这个3
+        2: [
+            'm_LocalRotation.x',
+            'm_LocalRotation.y',
+            'm_LocalRotation.z',
+            'm_LocalRotation.w',
+        ],
+        3: [
             'm_LocalScale.x',
             'm_LocalScale.y',
             'm_LocalScale.z'
-        ]
+        ],
+        4: [  # 欧拉角
+            'm_LocalRotation.x',
+            'm_LocalRotation.y',
+            'm_LocalRotation.z'
+        ],
     },
     ClassIDType.ParticleSystem: {
         2453832896: "autoRandomSeed",

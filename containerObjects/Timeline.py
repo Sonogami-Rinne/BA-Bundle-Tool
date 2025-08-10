@@ -11,6 +11,7 @@ from unityResourceNode import UnityResourceNode
 from linkedList import LinkedList
 from propertyHash import get_property
 
+
 class Timeline(ContainerObject):
     """
     总的那个时间线.说实话应该从PlayableDirector开始的
@@ -19,6 +20,7 @@ class Timeline(ContainerObject):
     def __init__(self, parent):
         super().__init__(parent)
         self.data = {
+            'bgm': '',
             'animationClip': [],
             'soundFix': [],
             'spineAnimation': []
@@ -33,7 +35,8 @@ class Timeline(ContainerObject):
 
         for node in nodes:
             for i in range(len(node.transform.hierarchy)):
-                result[util.compute_unity_hash('/'.join(node.transform.hierarchy[i:]))] = ('/'.join(node.transform.hierarchy[i:]), node)
+                result[util.compute_unity_hash('/'.join(node.transform.hierarchy[i:]))] = (
+                    '/'.join(node.transform.hierarchy[i:]), node)
 
         return result
 
@@ -92,9 +95,6 @@ class Timeline(ContainerObject):
             script = item.script
             data = {}
 
-            # type_name = inverse_map[str(item.typeID)]
-            #  path = game_object_dict.get_path(item.path)
-            #  data['gameObject'] = path.get_identification()
             path_object = hash_dict.get(item.path)
             # if path_object is None:
             #     _hash_dict = self._get_hash_dict_()
@@ -117,21 +117,9 @@ class Timeline(ContainerObject):
                             if _node.type == item.typeID:
                                 data['node'] = _node.obj.object_reader.read_typetree()
                                 break
-            # if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象
-            #     file_id = script.m_FileID
-            #     iden = (node.cab if file_id == 0 else dependencies[file_id - 1]) + str(path_id)
-            #     data['node'] = nodes_dict[iden].obj.object_reader.read_typetree()
-            # else:
-            #     if item.typeID == ClassIDType.GameObject:
-            #         data['node'] = path_object[1].obj.object_reader.read_typetree()
-            #     else:
-            #         for node in path_object[1].children.values():
-            #             if node.type == item.typeID:
-            #                 data['node'] = node.obj.object_reader.read_typetree()
-            #                 break
 
             data['isPPtrCurve'] = item.isPPtrCurve != 0
-            data['curve'] = []
+            data['frames'] = []
 
             tmp = get_property(item.typeID, item.attribute)
             if isinstance(tmp, list):
@@ -143,22 +131,6 @@ class Timeline(ContainerObject):
                 data['property'] = tmp
                 bindings.append(data)
 
-            # assert False
-            # if (tmp := info_json_manager.get_property_name(type_name, item.attribute)) is None:
-            #     if tmp := compound_hash.get(item.attribute):
-            #         for extend in tmp:
-            #             extended_item = data.copy()
-            #             extended_item['property'] = extend
-            #             bindings.append(extended_item)
-            #     else:
-            #         util.CLogging.error(f'Unknown property hash {item.attribute}, {type_name}')
-            #     # assert False
-
-
-            # else:
-            #     data['property'] = tmp
-            #     bindings.append(data)
-        # generic_bindings['genericBindings'] = bindings
         return {
             'pptrCurveMapping': generic_bindings.pptrCurveMapping,
             'genericBindings': bindings
@@ -175,41 +147,10 @@ class Timeline(ContainerObject):
         data_uint = streamed.data
         buf = struct.pack(f"<{len(data_uint)}I", *data_uint)
         reader = io.BytesIO(buf)
-        not_first = False
         generic_bindings = generic_bindings['genericBindings']
+        curves = {}
 
-        # tmp = []
-        # while reader.tell() + 8 <= len(buf):
-        #     item = {}
-        #
-        #     pos = reader.tell()
-        #     time = struct.unpack('<f', reader.read(4))[0]
-        #
-        #     item['time'] = time
-        #
-        #     curve_count = struct.unpack('<H', reader.read(2))[0]
-        #     item['curve_count'] = curve_count
-        #     item['padding'] = struct.unpack('<H', reader.read(2))[0]
-        #
-        #     item['data'] = []
-        #
-        #     for _ in range(curve_count):
-        #         sub_item = {}
-        #         curve_index = struct.unpack('<H', reader.read((2)))[0]
-        #         sub_item['curve_index'] = curve_index
-        #
-        #         sub_item['padding'] = struct.unpack('<H', reader.read(2))[0]
-        #
-        #         sub_item['data'] = struct.unpack('<4f', reader.read(16))
-        #         item['data'].append(sub_item)
-        #
-        #     tmp.append(item)
-        #
-        #     if reader.tell() == pos:
-        #         break
-        #
-        # if reader.tell() < len(buf):
-        #     raise IOError
+        #  从流中读取数据
         while reader.tell() + 8 <= len(buf):
             pos = reader.tell()
             time = struct.unpack("<f", reader.read(4))[0]
@@ -219,25 +160,63 @@ class Timeline(ContainerObject):
 
             curve_count = struct.unpack("<H", reader.read(2))[0]
             reader.read(2)  # padding, skip
-            if not_first:
-                for _ in range(curve_count):
-                    curve_index = struct.unpack('<H', reader.read(2))[0]
-                    reader.read(2)
-                    data = struct.unpack("<4f", reader.read(16))
 
-                    if curve_index >= len(generic_bindings):
-                        util.CLogging.error('Curve index out of range')
-                    else:
-                        generic_bindings[curve_index]['curve'].append({
-                            'time': time,
-                            'data': data
-                        })
-            else:  # 跳过第一帧
-                reader.read(20 * curve_count)
-                not_first = True
+            for _ in range(curve_count):
+                curve_index = struct.unpack('<H', reader.read(2))[0]
+                reader.read(2)
+                data = struct.unpack("<4f", reader.read(16))
+
+                if (curve := curves.get(curve_index)) is None:
+                    curve = []
+                    curves[curve_index] = curve
+
+                curve.append({
+                    'time': round(time, 3),
+                    'data': data
+                })
 
             if reader.tell() == pos:
                 break
+
+        # 曲线处理
+        for curve_index, curve in curves.items():
+            # if binding := generic_bindings.get(curve_index):
+            if curve_index < len(generic_bindings):
+                binding = generic_bindings[curve_index]
+                if binding['isPPtrCurve']:
+                    if len(curve) > 0:
+                        binding['initState'] = curve[0][3]
+                    for i in range(1, len(curve)):
+                        binding['frames'].append({
+                            'time': curve[i]['time'],
+                            'value': round(curve[i]['data'][3])
+                        })
+                else:
+                    for i in range(1, len(curve) - 1):
+                        delta = curve[i + 1]['time'] - curve[i]['time']
+                        _c0 = curve[i]['data'][0] * delta * delta
+                        _c1 = curve[i]['data'][1] * delta
+                        in_slope = round(3 * _c0 + 2 * _c1 + curve[i]['data'][2], 2)
+                        if in_slope == .0 and curve[i]['data'][2] == .0:
+                            in_slope = None
+                        curve[i + 1]['inSlope'] = in_slope
+                        # curve[i + 1]['inSlope'] = round(3 * _c0 + 2 * _c1 + curve[i]['data'][2], 2)
+                        binding['frames'].append({
+                            'time': curve[i]['time'],
+                            'value': round(curve[i]['data'][3], 2),
+                            'inSlope': curve[i].get('inSlope', None),
+                            'outSlope': curve[i]['data'][2]
+                        })
+                    binding['frames'].append(({
+                        'time': curve[-1]['time'],
+                        'value': round(curve[-1]['data'][3], 2),
+                        'inSlope': curve[-1].get('inSlope', None),
+                        'outSlope': None
+                    }))
+
+            else:
+                util.CLogging.error('Curve index out of range')
+
         # return frames
         return generic_bindings
 
@@ -253,7 +232,7 @@ class Timeline(ContainerObject):
             for name, _node in node.children.items():
                 if _node.name.startswith('Ani'):  # Animation Track
                     data = {
-                        'loop': _node.obj.mInfiniteClipLoop
+                        'loop': _node.obj.mInfiniteClipLoop == 1
                     }
                     animation_clip = _node.children['m_InfiniteClip'].obj  # .obj.read_typetree()  # 假设只有m_InfinityClip
                     # data['genericBindings'] = animation_clip['m_ClipBindingConstant']
@@ -271,22 +250,24 @@ class Timeline(ContainerObject):
                     data = self.data['soundFix']
                     for clip in node_obj.m_Clips:
                         clip_data = {
-                            'clipIn': clip.m_ClipIn,
-                            'duration': clip.m_Duration,
+                            # 'clipIn': clip.m_ClipIn,
+                            'duration': round(clip.m_Duration, 3),
                             # 'easeInDuration': node_obj.m_EaseInDuration,  # 这两个忽略算了
                             # 'easeOutDuration': node_obj.m_EaseOutDuration,
-                            'start': clip.m_Start,
+                            'start': round(clip.m_Start, 3),
                         }
                         # target = clip.m_Asset.read()
-                        iden = (_node.cab if clip.m_Asset.m_FileID == 0 else _node.dependencies[clip.m_Asset.m_FileID - 1]) + str(clip.m_Asset.m_PathID)
+                        iden = (_node.cab if clip.m_Asset.m_FileID == 0 else _node.dependencies[
+                            clip.m_Asset.m_FileID - 1]) + str(clip.m_Asset.m_PathID)
                         target = nodes_dict[iden].obj
                         # audio_data = target.AudioData
                         audio_data = getattr(target, 'AudioData', None)
                         if audio_data:
 
                             externals = target.assets_file.externals
-                            clip_data['volume'] = audio_data.Volume
-                            clip_data['delay'] = audio_data.Delay  # emm, start和delay这两个……
+                            clip_data['volume'] = round(audio_data.Volume, 3)
+                            clip_data['start'] += round(audio_data.Delay, 3)
+                            # clip_data['delay'] = round(audio_data.Delay)  # emm, start和delay这两个……
 
                             audios = []
                             for audio in audio_data.AudioClips:
@@ -308,11 +289,11 @@ class Timeline(ContainerObject):
                     node_obj = _node.obj
                     for clip in node_obj.m_Clips:
                         clip_data = {
-                            'clipIn': clip.m_ClipIn,
-                            'duration': clip.m_Duration,
+                            # 'clipIn': clip.m_ClipIn,
+                            'duration': round(clip.m_Duration, 3),
                             # 'easeInDuration': node_obj.m_EaseInDuration,  # 这两个忽略算了
                             # 'easeOutDuration': node_obj.m_EaseOutDuration,
-                            'start': clip.m_Start,
+                            'start': round(clip.m_Start, 3),
                         }
                         target = clip.m_Asset
                         file_id = target.m_FileID

@@ -53,7 +53,7 @@ class PostProcessing(ContainerObject):
                 if attr_name.startswith('components'):
                     return_data = PostProcessing.__process__(component.obj)
                     if return_data is not None:
-                        data[attr_name] = return_data
+                        data.update(return_data)
 
                         flag = False
                         for _name, _node in node.parents:

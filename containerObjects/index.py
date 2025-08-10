@@ -3,13 +3,13 @@ import pathlib
 
 import infoJsonManager
 import util
-from containerObjects.AmbientEvent import AmbientEvent
+from containerObjects.AmbientAudio import AmbientEvent
 from containerObjects.GameObject import GameObject
 from containerObjects.InteractiveConfig import InteractiveConfig
 from containerObjects.Particle import Particle
 from containerObjects.PostProcessing import PostProcessing
 from containerObjects.SpineClips import SpineClips
-from containerObjects.SpriteRender import SpriteRender
+from containerObjects.SpriteRenderer import SpriteRender
 from containerObjects.Timeline import Timeline
 from containerObjects.ResourceJS import ResourceJS
 

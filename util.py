@@ -155,6 +155,7 @@ def compose_transform_matrix(translation, quaternion, scale):
 
     return transform_matrix
 
+
 def decompose_2d_transform(matrix_4x4):
     """
     从 4x4 变换矩阵提取 2D 变换参数（忽略 z 轴）
@@ -168,10 +169,10 @@ def decompose_2d_transform(matrix_4x4):
     theta = np.arctan2(matrix_4x4[1, 0], matrix_4x4[0, 0])
 
     # 提取 2D 缩放（去除旋转影响）
-    sx = np.sqrt(matrix_4x4[0, 0]**2 + matrix_4x4[1, 0]**2)
-    sy = np.sqrt(matrix_4x4[0, 1]**2 + matrix_4x4[1, 1]**2)
+    sx = np.sqrt(matrix_4x4[0, 0] ** 2 + matrix_4x4[1, 0] ** 2)
+    sy = np.sqrt(matrix_4x4[0, 1] ** 2 + matrix_4x4[1, 1] ** 2)
 
-    return (tx, ty), theta, (sx, sy)
+    return (round(tx, 2), round(ty, 2)), round(theta, 4), (round(sx, 2), round(sy, 2))
 
 
 def get_transform(base_node):
@@ -218,4 +219,3 @@ class CLogging:
     @staticmethod
     def info(message):
         print(f"\033[97m{message}\033[0m")
-

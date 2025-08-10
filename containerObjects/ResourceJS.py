@@ -13,9 +13,9 @@ class ResourceJS(ContainerObject):
             f.write('const resourceLoader = {\n')
             for file in os.listdir(base_path):
                 if file.endswith('.skel'):
-                    f.write(f'"{file}": () => import("@skel/{file}?binary"),\n')
+                    f.write(f'"{file}": () => import("@assets/{file}?binary"),\n')
                 elif file.endswith('.atlas'):
-                    f.write(f'"{file}": () => import("@atlas/{file}?raw"),\n')
+                    f.write(f'"{file}": () => import("@assets/{file}?raw"),\n')
             for file in os.listdir(os.path.join(base_path, 'image')):
                 f.write(f'"{file}": () => import("@image/{file}?binary"),\n')
 

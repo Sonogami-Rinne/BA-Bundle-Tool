@@ -27,7 +27,7 @@ class SpriteRender(ContainerObject):
 
             dependencies = node.dependencies
 
-            translate, rotation, scale = util.decompose_2d_transform(util.get_transform(node.children['m_GameObject']))
+
             item = {
                 'sprite': node.children['m_Sprite'].name,
                 'color': to_tuple(obj.m_Color),
@@ -39,15 +39,27 @@ class SpriteRender(ContainerObject):
                 'drawMode': obj.m_DrawMode,
                 'sortingLayer': obj.m_SortingLayer,
                 'maskInteraction': obj.m_MaskInteraction,
-                'gameObject': game_object_container.get_index(node.children['m_GameObject'].get_identification()),
-                'translate': translate,
-                'rotation': rotation,
-                'scale': scale
+                # 'gameObject': game_object_container.get_index(node.children['m_GameObject'].get_identification()),
+                # 'gameObjectName': node.children['m_GameObject'].name,  # 如果是Glow的话直接用css渲染，不走pixi了
+                # 'translate': translate,
+                # 'rotation': rotation,
+                # 'scale': scale
             }
+            if game_object := node.children.get('m_GameObject'):
+                translate, rotation, scale = util.decompose_2d_transform(util.get_transform(game_object))
+                item['gameObject'] = game_object_container.get_index(game_object.get_identification())
+                item['gameObjectName'] = game_object.name
+                item['translate'] = translate
+                item['rotation'] = rotation
+                item['scale'] = scale
+
+            else:
+                item['gameObject'] = -1
+
             material_data = []
-            images = []
             for material in obj.m_Materials:
-                iden = (dependencies[material.m_FileID - 1] if material.m_FileID != 0 else node.cab) + str(material.m_PathID)
+                iden = (dependencies[material.m_FileID - 1] if material.m_FileID != 0 else node.cab) + str(
+                    material.m_PathID)
                 if target := nodes_dict.get(iden):
                     material_data.append(target.obj.object_reader.read_typetree())
 
@@ -68,4 +80,3 @@ class SpriteRender(ContainerObject):
     def clear(self):
         super().clear()
         self.sprites.clear()
-

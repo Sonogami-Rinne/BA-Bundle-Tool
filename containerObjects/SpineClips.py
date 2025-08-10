@@ -1,6 +1,7 @@
 import os
 import pathlib
 
+import util
 from containerObjects.ContainerObject import ContainerObject
 
 
@@ -10,6 +11,7 @@ class SpineClips(ContainerObject):
         self.clip_keys = []
         self.skeleton_keys = []
         self.data = {
+            'voiceRedirect': None,
             'skeletons': [],
             'clips': [],
         }
@@ -52,13 +54,21 @@ class SpineClips(ContainerObject):
                         game_object = _node.children['m_GameObject']
 
                 assert game_object
+                # translate, rotation, scale = util.decompose_2d_transform(util.get_transform(game_object))
 
                 self.data['skeletons'].append({
-                    'defaultMix': skeleton_node.obj.defaultMix,
-                    'scale': skeleton_node.obj.scale,
+                    'defaultMix': round(skeleton_node.obj.defaultMix, 2),
+                    # 'scale': skeleton_node.obj.scale,
+                    'scale': 1,
                     'skeleton': skeleton_node.children['skeletonJSON'],
                     'atlas': atlas,
-                    'gameObject': game_object_container.get_index(game_object)
+                    'gameObject': game_object_container.get_index(game_object.get_identification()),
+                    # 'transform': {
+                    #     'translate': translate,
+                    #     'rotation': rotation,
+                    #     'scale': scale
+                    # },
+                    'viewBounds': None
                 })
 
             else:
@@ -68,19 +78,22 @@ class SpineClips(ContainerObject):
             tmp = {
                 'skeleton': skeleton_index,
                 'clipName': node_obj.ClipName,
-                'introDelayDuration': node_obj.IntroDelayDuration,
-                'introMix': node_obj.IntroMix,
-                'outroMix': node_obj.OutroMix,
-                'outroStartOffset': node_obj.OutroStartOffset,
+                'loop': node_obj.Loop == 1,
+                'introDelayDuration': round(node_obj.IntroDelayDuration, 2),
+                'introMix': round(node_obj.IntroMix, 2),
+                'outroMix': round(node_obj.OutroMix, 2),
+                'outroStartOffset': round(node_obj.OutroStartOffset, 2),
                 'track': node_obj.Track,  # Track为负数的话，播完就隐藏当前spine对象
                 'useDefaultIntroMix': node_obj.UseDefaultIntroMix == 1,
                 'useDefaultOutroMix': node_obj.UseDefaultOutroMix == 1,
-                'isTrackMainIdle': node_obj.IsTrackMainIdle,
+                'isTrackMainIdle': node_obj.IsTrackMainIdle == 1,
                 'syncPlays': [
                     self.clip_keys.index(node.children[i].get_identification()) for i in
                     list(filter(lambda x: x.startswith('Sync'), node.children.keys()))
-                ]
+                ],
+                'nextClip': self.clip_keys.index(node.children['NextClipObject'].get_identification()) if 'NextClipObject' in node.children else None
             }
+
             sound_keys = []
             for i in node_obj.SoundKeys:
                 target = i.Event
@@ -90,10 +103,10 @@ class SpineClips(ContainerObject):
                 target_obj = target.obj
 
                 sub_item = {
-                    'time': i.Time,
-                    'prefix': target.name,
-                    'loop': target_obj.AudioData.Loop,
-                    'volume': target_obj.AudioData.Volume
+                    # 'time': i.Time,
+                    'delay': round(i.Time),  # hmm
+                    'loop': target_obj.AudioData.Loop == 1,
+                    'volume': round(target_obj.AudioData.Volume, 2)
                 }
 
                 audios = []
@@ -106,6 +119,7 @@ class SpineClips(ContainerObject):
                             audios.append(_target.name)
 
                 sub_item['audios'] = audios
+                sound_keys.append(sub_item)
 
             tmp['soundKeys'] = sound_keys
             self.data['clips'].append(tmp)
@@ -122,10 +136,10 @@ class SpineClips(ContainerObject):
     def save_data(self, base_path):
         _path = os.path.join(base_path, 'audio', 'other')
         pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
-        for prefix, audios in self.audios.items():
+        for _, audios in self.audios.items():
             for audio in audios:
                 for sample_name, sample_data in audio.obj.samples.items():
-                    with open(os.path.join(_path, prefix + '-' + sample_name), 'wb+') as f:
+                    with open(os.path.join(_path, sample_name), 'wb+') as f:
                         f.write(sample_data)
 
         _path = os.path.join(base_path, 'image')
@@ -164,7 +178,10 @@ class SpineClips(ContainerObject):
         self.clip_keys.clear()
         self.skeleton_keys.clear()
         self.data = {
+            'voiceRedirect': None,
             'skeletons': [],
             'clips': [],
         }
+        # self.data['skeletons'].clear()
+        # self.data['clips'].clear()
 
