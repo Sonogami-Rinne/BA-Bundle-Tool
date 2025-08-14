@@ -28,6 +28,7 @@ class Timeline(ContainerObject):
         self.nodes = []
         self.game_object_container = None
         self.audios = []
+        self.textures = []
 
     def _get_hash_dict_(self):
         result = {}
@@ -131,8 +132,17 @@ class Timeline(ContainerObject):
                 data['property'] = tmp
                 bindings.append(data)
 
+        textures = {}
+        if len(PPtr_mapping := generic_bindings.pptrCurveMapping) > 0:
+            for index, pptr in enumerate(PPtr_mapping):
+                if pptr.m_PathID != 0:
+                    iden = (dependencies[pptr.m_FileID - 1] if pptr.m_FileID > 0 else node.cab) + pptr.m_PathID
+                    if target := nodes_dict.get(iden):
+                        textures[index] = target.name
+                    else:
+                        util.CLogging.warn(f'Node {iden} not found when creating atlas')
         return {
-            'pptrCurveMapping': generic_bindings.pptrCurveMapping,
+            'pptrCurveMapping': textures,
             'genericBindings': bindings
         }
 
@@ -147,7 +157,7 @@ class Timeline(ContainerObject):
         data_uint = streamed.data
         buf = struct.pack(f"<{len(data_uint)}I", *data_uint)
         reader = io.BytesIO(buf)
-        generic_bindings = generic_bindings['genericBindings']
+        # generic_bindings = generic_bindings['genericBindings']
         curves = {}
 
         #  从流中读取数据
@@ -242,7 +252,8 @@ class Timeline(ContainerObject):
                     if len(animation_clip.m_DenseClip.m_SampleArray) > 0:
                         util.CLogging.warn('Warn, length of m_SampleArray is not 0')
 
-                    data['data'] = Timeline._parse_streamed_clip(animation_clip.m_StreamedClip, generic_bindings)
+                    data['PPtrMapping'] = generic_bindings['pptrCurveMapping']
+                    data['data'] = Timeline._parse_streamed_clip(animation_clip.m_StreamedClip, generic_bindings['genericBindings'])
                     self.data['animationClip'].append(data)
 
                 elif _node.name.startswith('SFX'):  # Sound Fix
@@ -326,6 +337,7 @@ class Timeline(ContainerObject):
             'soundFix': [],
             'spineAnimation': []
         }
+        self.textures.clear()
 
     def save_data(self, base_path):
         _path = os.path.join(base_path, 'audio', 'other')
@@ -336,6 +348,15 @@ class Timeline(ContainerObject):
                     f.write(data)
         _path = os.path.join(base_path, 'audio', 'voice')
         pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
+
+        _path = os.path.join(base_path, 'image')
+        pathlib.Path(_path).mkdir(exist_ok=True, parents=True)
+
+        for texture in self.textures:
+            obj = texture.obj
+            save_name = texture.name + '.png' if not texture.name.endswith('.png') else texture.name
+            obj.image.save(os.path.join(_path, save_name))
+
         super().save_data(base_path)
 
         # for name, data in audio_obj.samples.items():

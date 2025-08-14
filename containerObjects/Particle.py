@@ -133,8 +133,8 @@ class Particle(ContainerObject):
             'colorKeys': obj.m_NumColorKeys
         }
         for i in range(0, 7):
-            data['atime'].append(getattr(obj, f'atime{i}'))
-            data['ctime'].append(getattr(obj, f'ctime{i}'))
+            data['atime'].append(round(getattr(obj, f'atime{i}') / 32767, 3))
+            data['ctime'].append(round(getattr(obj, f'ctime{i}'), 3))
             data['key'].append(util.to_tuple(getattr(obj, f'key{i}')))
         return data
 
@@ -146,9 +146,9 @@ class Particle(ContainerObject):
                 'state': 0,
                 'color': util.to_tuple(obj.maxColor)
             }
-        elif state == 1:
+        elif state == 1 or state == 4:
             return {
-                'state': 1,
+                'state': state,
                 'gradient': Particle.process_gradient(obj.maxGradient)
             }
         elif state == 2:
@@ -157,19 +157,12 @@ class Particle(ContainerObject):
                 'minColor': util.to_tuple(obj.minColor),
                 'maxColor': util.to_tuple(obj.maxColor),
             }
-        else:
+        elif state == 3:
             return{
                 'state': 3,
                 'minGradient': Particle.process_gradient(obj.minGradient),
                 'maxGradient': Particle.process_gradient(obj.maxGradient),
             }
-        # return {
-        #     'maxColor': util.to_tuple(obj.maxColor),
-        #     'minColor': util.to_tuple(obj.minColor),
-        #     'maxGradient': Particle.process_gradient(obj.maxGradient),
-        #     'minGradient': Particle.process_gradient(obj.minGradient),
-        #     'minMaxState': obj.minMaxState
-        # }
 
     @staticmethod
     def process_animation_curve(obj):
@@ -203,22 +196,28 @@ class Particle(ContainerObject):
         elif state == 2:
             return {
                 'state': state,
-                'minCurve': (
-                    obj.minScalar,
-                    Particle.process_animation_curve(obj.minCurve)
-                ),
-                'maxCurve': (
-                    obj.scalar,
-                    Particle.process_animation_curve(obj.maxCurve)
-                )
+                'minCurve': Particle.process_animation_curve(obj.minCurve),
+                'minValue': obj.minScalar,
+                'maxCurve': Particle.process_animation_curve(obj.maxCurve),
+                'maxValue': obj.scalar
+                # 'minCurve': (
+                #     obj.minScalar,
+                #     Particle.process_animation_curve(obj.minCurve)
+                # ),
+                # 'maxCurve': (
+                #     obj.scalar,
+                #     Particle.process_animation_curve(obj.maxCurve)
+                # )
             }
         elif state == 3:
             return {
                 'state': state,
-                'value': (
-                    obj.minScalar,
-                    obj.scalar
-                )
+                'minValue': obj.minScalar,
+                'maxValue': obj.scalar
+                # 'value': (
+                #     obj.minScalar,
+                #     obj.scalar
+                # )
             }
 
     shape_process_entry = {
@@ -244,6 +243,12 @@ class Particle(ContainerObject):
         ShapeId.Sprite: __process_sprite__,
         ShapeId.SpriteRenderer: __process_sprite__
     }
+
+    @staticmethod
+    def to_GLSL(data):
+        _func_blend_interpolate = '''
+        vec4(int[8] atime, int[8] ctime, vec4[8] key)
+        '''
 
     def __init__(self, parent_container):
         super().__init__(parent_container)
@@ -272,7 +277,9 @@ class Particle(ContainerObject):
         #  颜色模块
         sub_module = obj.ColorModule
         if sub_module.enabled:
-            data['colorModule'] = Particle.process_min_max_gradient(sub_module.gradient)
+            data['colorModule'] = {
+                'gradient': Particle.process_min_max_gradient(sub_module.gradient)
+            }
 
         # 自定义数据模块
         sub_module = obj.CustomDataModule
@@ -325,20 +332,20 @@ class Particle(ContainerObject):
             'maxNum': sub_module.maxNumParticles,
             'startColor': Particle.process_min_max_gradient(sub_module.startColor),
             'startLifeTime': Particle.process_min_max_curve(sub_module.startLifetime),
-            'rotation3D': sub_module.rotation3D,
-            'startRotationX': Particle.process_min_max_curve(sub_module.startRotationX),
-            'startRotationY': Particle.process_min_max_curve(sub_module.startRotationY),
+            # 'rotation3D': sub_module.rotation3D,
+            # 'startRotationX': Particle.process_min_max_curve(sub_module.startRotationX),
+            # 'startRotationY': Particle.process_min_max_curve(sub_module.startRotationY),
             'startRotation': Particle.process_min_max_curve(sub_module.startRotation),
             'size3D': sub_module.size3D,
             'startSizeY': Particle.process_min_max_curve(sub_module.startSizeY),
-            'startSizeZ': Particle.process_min_max_curve(sub_module.startSizeZ),
+            # 'startSizeZ': Particle.process_min_max_curve(sub_module.startSizeZ),
             'startSize': Particle.process_min_max_curve(sub_module.startSize),
             'startSpeed': Particle.process_min_max_curve(sub_module.startSize),
             'duration': obj.lengthInSec,  # 粒子系统的时长。不知道为什么，这个东西放在粒子系统的根部分，而不是模块内
             'loop': obj.looping,
-            'playOnAwake': obj.playOnAwake,  # 在创建对象后自动启动
-            'randomSeed': obj.randomSeed,
-            'autoRandomSeed': obj.autoRandomSeed,
+            'playOnAwake': obj.playOnAwake,  # 在创建对象后自动启动.hmm
+            # 'randomSeed': obj.randomSeed,
+            # 'autoRandomSeed': obj.autoRandomSeed,
             'prewarm': obj.prewarm,
             'scalingMode': obj.scalingMode,  # hierarchy, local(忽略父级的Transform的scale), shape(仅改变发射区域，不改变粒子大小)
             'simulationSpeed': obj.simulationSpeed,  # 更新速度
@@ -366,14 +373,14 @@ class Particle(ContainerObject):
                 # 'quality': sub_module.quality,  # 质量。固定2维
                 'remapEnabled': sub_module.remapEnabled,  # 是否将数值重映射
                 'remapY': Particle.process_min_max_curve(sub_module.remapY),
-                'remapZ': Particle.process_min_max_curve(sub_module.remapZ),
+                # 'remapZ': Particle.process_min_max_curve(sub_module.remapZ),
                 'remap': Particle.process_min_max_curve(sub_module.remap),
                 'rotationAmount': sub_module.rotationAmount,  # 类似,
                 'scrollSpeed': Particle.process_min_max_curve(sub_module.scrollSpeed),  # 随着时间的推移而移动噪声场可产生更不可预测和不稳定的粒子移动
                 'separateAxis': sub_module.separateAxes,  # 在每个轴上独立控制强度和重新映射
                 'sizeAmount': Particle.process_min_max_curve(sub_module.sizeAmount),  # 类似
                 'strengthY': Particle.process_min_max_curve(sub_module.strengthY),
-                'strengthZ': Particle.process_min_max_curve(sub_module.strengthZ),
+                # 'strengthZ': Particle.process_min_max_curve(sub_module.strengthZ),
                 'strength': Particle.process_min_max_curve(sub_module.strength),
                 # 噪声在粒子的生命周期内对粒子的影响有多强,猜测这个为基本影响参数，再分别乘上那三个
             }
@@ -384,9 +391,9 @@ class Particle(ContainerObject):
             data['rotationBySpeedModule'] = {
                 'curve': Particle.process_min_max_curve(sub_module.curve),
                 'range': util.to_tuple(sub_module.range),
-                'separateAxis': sub_module.separateAxes,
-                'curveX': Particle.process_min_max_curve(sub_module.x),
-                'curveY': Particle.process_min_max_curve(sub_module.y),
+                # 'separateAxis': sub_module.separateAxes,
+                # 'curveX': Particle.process_min_max_curve(sub_module.x),
+                # 'curveY': Particle.process_min_max_curve(sub_module.y),
             }
 
         #  旋转模块,以度为单位
@@ -394,9 +401,9 @@ class Particle(ContainerObject):
         if sub_module.enabled:
             data['rotationModule'] = {
                 'curve': Particle.process_min_max_curve(sub_module.curve),
-                'separateAxes': sub_module.separateAxes,
-                'curveX': Particle.process_min_max_curve(sub_module.x),
-                'curvey': Particle.process_min_max_curve(sub_module.y),
+                # 'separateAxes': sub_module.separateAxes,
+                # 'curveX': Particle.process_min_max_curve(sub_module.x),
+                # 'curvey': Particle.process_min_max_curve(sub_module.y),
             }
 
         #  形状模块（粒子生成区域）
@@ -424,15 +431,15 @@ class Particle(ContainerObject):
         if tmp := Particle.shape_process_entry[shape](self, sub_module, nodes_dict, node):
             data['shapeModule'].update(tmp)
 
-        #  旋转随速度变化,以度为单位
+        #  缩放随速度变化,以度为单位
         sub_module = obj.SizeBySpeedModule
         if sub_module.enabled:
             data['sizeBySpeedModule'] = {
-                'curve': Particle.process_min_max_curve(sub_module.curve),
+                'curve': Particle.process_min_max_curve(sub_module.curve) if not sub_module.separateAxes else Particle.process_min_max_curve(sub_module.z),
                 'range': util.to_tuple(sub_module.range),
-                'separateAxis': sub_module.separateAxes,
-                'curveY': Particle.process_min_max_curve(sub_module.y),
-                'curveZ': Particle.process_min_max_curve(sub_module.z),
+                # 'separateAxis': sub_module.separateAxes,
+                # 'curveY': Particle.process_min_max_curve(sub_module.y),
+                # 'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
         #  缩放模块
@@ -442,7 +449,7 @@ class Particle(ContainerObject):
                 'curve': Particle.process_min_max_curve(sub_module.curve),
                 'separateAxes': sub_module.separateAxes,
                 'curveY': Particle.process_min_max_curve(sub_module.y),
-                'curveZ': Particle.process_min_max_curve(sub_module.z),
+                # 'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
         #  速度模块
@@ -451,13 +458,13 @@ class Particle(ContainerObject):
             data['velocityModule'] = {
                 'x': Particle.process_min_max_curve(sub_module.x),
                 'y': Particle.process_min_max_curve(sub_module.y),
-                'z': Particle.process_min_max_curve(sub_module.z),
+                # 'z': Particle.process_min_max_curve(sub_module.z),
                 'orbitalX': Particle.process_min_max_curve(sub_module.orbitalX),
                 'orbitalY': Particle.process_min_max_curve(sub_module.orbitalY),
-                'orbitalZ': Particle.process_min_max_curve(sub_module.orbitalZ),
+                # 'orbitalZ': Particle.process_min_max_curve(sub_module.orbitalZ),
                 'offsetX': Particle.process_min_max_curve(sub_module.orbitalOffsetX),
                 'offsetY': Particle.process_min_max_curve(sub_module.orbitalOffsetY),
-                'offsetZ': Particle.process_min_max_curve(sub_module.orbitalOffsetZ),
+                # 'offsetZ': Particle.process_min_max_curve(sub_module.orbitalOffsetZ),
                 'radial': Particle.process_min_max_curve(sub_module.radial),
                 'speedModifier': Particle.process_min_max_curve(sub_module.speedModifier),
             }
@@ -474,7 +481,7 @@ class Particle(ContainerObject):
                 'separateAxis': sub_module.separateAxis,
                 'curveX': Particle.process_min_max_curve(sub_module.x),
                 'curveY': Particle.process_min_max_curve(sub_module.y),
-                'curveZ': Particle.process_min_max_curve(sub_module.z),
+                # 'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
         # 动态材质模块
