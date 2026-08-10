@@ -158,7 +158,7 @@ class SpineClips(ContainerObject):
 
             for atlas in target:
                 atlas_node = atlas['atlas']
-                with open(os.path.join(base_path, atlas_node.name), 'w+') as f:
+                with open(os.path.join(base_path, atlas_node.name), 'w+', encoding='utf-8') as f:
                     f.write(atlas_node.obj.m_Script)
 
                 atlas['atlas'] = atlas_node.name

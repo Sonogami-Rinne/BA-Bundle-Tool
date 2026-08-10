@@ -1,3 +1,6 @@
+"""
+记录各个包内各个文件的类型和名字
+"""
 import json
 import os
 

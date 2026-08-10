@@ -9,11 +9,6 @@ from shapeId import ShapeId
 
 class Particle(ContainerObject):
 
-    def __process_sphere__(self, obj, nodes_dict, node):
-        return {
-            'radius': obj.radius.value,
-            'radiusThickness': obj.radiusThickness
-        }
 
     def __process_cone__(self, obj, nodes_dict, node):
         return {
@@ -22,8 +17,8 @@ class Particle(ContainerObject):
             'radiusThickness': obj.radiusThickness,  # 发射粒子的体积比例。值为 0 表示从形状的外表面发射粒子。值为 1 表示从整个体积发射粒子。介于两者之间的值将使用体积的一定比例。
             'arc': obj.arc.value,
             'arcMode': obj.arc.mode,
-            'speed': Particle.process_min_max_curve(obj.arc.speed),
-            'spread': obj.arc.spread,
+            'arcSpeed': Particle.process_min_max_curve(obj.arc.speed),
+            'arcSpread': obj.arc.spread,
             'length': obj.length
         }
 
@@ -80,14 +75,6 @@ class Particle(ContainerObject):
             'spread': obj.arc.spread
         }
 
-    def __process_edge__(self, obj, nodes_dict, node):
-        return {
-            'radius': obj.radius.value,
-            'radiusMode': obj.radius.mode,
-            'speed': Particle.process_min_max_curve(obj.radius.speed),
-            'spread': obj.radius.spread
-        }
-
     def __process_donut__(self, obj, nodes_dict, node):
         return {
             'radius': obj.radius.value,
@@ -121,6 +108,12 @@ class Particle(ContainerObject):
 
     def __process_return_empty__(self, obj, nodes_dict, node):
         return None
+
+    def __process_rectangle__(selfself, obj, nodes_dict, node):
+        return {
+            'boxThickness': util.to_tuple(obj.boxThickness)
+            # 'boxThicknessZ': obj.boxThicknessZ,
+        }
 
     @staticmethod
     def process_gradient(obj):
@@ -221,12 +214,12 @@ class Particle(ContainerObject):
             }
 
     shape_process_entry = {
-        ShapeId.Sphere: __process_sphere__,
-        ShapeId.SphereShell: __process_sphere__,
-        ShapeId.Hemisphere: __process_sphere__,
-        ShapeId.HemisphereShell: __process_sphere__,
+        ShapeId.Sphere: __process_circle__,
+        ShapeId.SphereShell: __process_circle__,
+        ShapeId.Hemisphere: __process_circle__,
+        ShapeId.HemisphereShell: __process_circle__,
         ShapeId.Cone: __process_cone__,
-        ShapeId.Box: __process_return_empty__,
+        ShapeId.Box: __process_rectangle__,
         ShapeId.Mesh: __process_mesh__,
         ShapeId.ConeShell: __process_cone__,
         ShapeId.ConeVolume: __process_cone__,
@@ -236,10 +229,10 @@ class Particle(ContainerObject):
         ShapeId.SingleSidedEdge: __process_circle__,
         ShapeId.MeshRenderer: __process_mesh__,
         ShapeId.SkinnedMeshRenderer: __process_mesh__,
-        ShapeId.BoxShell: __process_return_empty__,
-        ShapeId.BoxEdge: __process_return_empty__,
+        ShapeId.BoxShell: __process_rectangle__,
+        ShapeId.BoxEdge: __process_rectangle__,
         ShapeId.Donut: __process_donut__,
-        ShapeId.Rectangle: __process_return_empty__,
+        ShapeId.Rectangle: __process_rectangle__,
         ShapeId.Sprite: __process_sprite__,
         ShapeId.SpriteRenderer: __process_sprite__
     }
@@ -271,7 +264,7 @@ class Particle(ContainerObject):
         if sub_module.enabled:
             data['colorBySpeedModule'] = {
                 'gradient': Particle.process_min_max_gradient(sub_module.gradient),
-                'range': util.to_tuple(sub_module.range)
+                'range': (sub_module.range.x, sub_module.range.y)
             }
 
         #  颜色模块
@@ -370,7 +363,7 @@ class Particle(ContainerObject):
                 'octaveScale': sub_module.octaveScale,  # 频率逐层变化
                 'octaves': sub_module.octaves,  # 叠几层
                 'positionAmount': sub_module.positionAmount,  # 噪音对粒子位置影响程度的乘数
-                # 'quality': sub_module.quality,  # 质量。固定2维
+                'quality': sub_module.quality if sub_module.quality < 2 else 1,  # 质量
                 'remapEnabled': sub_module.remapEnabled,  # 是否将数值重映射
                 'remapY': Particle.process_min_max_curve(sub_module.remapY),
                 # 'remapZ': Particle.process_min_max_curve(sub_module.remapZ),
@@ -459,9 +452,9 @@ class Particle(ContainerObject):
                 'x': Particle.process_min_max_curve(sub_module.x),
                 'y': Particle.process_min_max_curve(sub_module.y),
                 # 'z': Particle.process_min_max_curve(sub_module.z),
-                'orbitalX': Particle.process_min_max_curve(sub_module.orbitalX),
-                'orbitalY': Particle.process_min_max_curve(sub_module.orbitalY),
-                # 'orbitalZ': Particle.process_min_max_curve(sub_module.orbitalZ),
+                # 'orbitalX': Particle.process_min_max_curve(sub_module.orbitalX),
+                # 'orbitalY': Particle.process_min_max_curve(sub_module.orbitalY),
+                'orbitalZ': Particle.process_min_max_curve(sub_module.orbitalZ),
                 'offsetX': Particle.process_min_max_curve(sub_module.orbitalOffsetX),
                 'offsetY': Particle.process_min_max_curve(sub_module.orbitalOffsetY),
                 # 'offsetZ': Particle.process_min_max_curve(sub_module.orbitalOffsetZ),
@@ -473,11 +466,11 @@ class Particle(ContainerObject):
         sub_module = obj.ClampVelocityModule
         if sub_module.enabled:
             data['clampVelocityModule'] = {
-                'damp': sub_module.dampen,
+                'damping': sub_module.dampen,
                 'drag': Particle.process_min_max_curve(sub_module.drag),
                 'magnitude': Particle.process_min_max_curve(sub_module.magnitude),
-                'multiplyDragByParticleSize': sub_module.multiplyDragByParticleSize,
-                'multiplyDragByParticleVelocity': sub_module.multiplyDragByParticleVelocity,
+                'multiplyDragByParticleSize': sub_module.multiplyDragByParticleSize != 0,
+                'multiplyDragByParticleVelocity': sub_module.multiplyDragByParticleVelocity != 0,
                 'separateAxis': sub_module.separateAxis,
                 'curveX': Particle.process_min_max_curve(sub_module.x),
                 'curveY': Particle.process_min_max_curve(sub_module.y),
@@ -489,11 +482,16 @@ class Particle(ContainerObject):
         if sub_module.enabled:
             data['UVModule'] = {
                 'cycles': sub_module.cycles,
+                'fps': sub_module.fps,
                 'frameOverTime': Particle.process_min_max_curve(sub_module.frameOverTime),
+                'startFrame': Particle.process_min_max_curve(sub_module.startFrame),
                 'mode': sub_module.mode,
+                'timeMode': sub_module.timeMode,
                 'rowMode': sub_module.rowMode,
+                'rowIndex': sub_module.rowIndex,
                 'tilesX': sub_module.tilesX,
                 'tilesY': sub_module.tilesY,
+                'speedRange': (sub_module.speedRange.x, sub_module.speedRange.y)
             }
             sprites = []
             for _sprite in sub_module.sprites:

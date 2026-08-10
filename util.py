@@ -17,7 +17,7 @@ MAX_BUFFER_LENGTH = 100
 缓冲区最大文件数目
 """
 
-BUNDLES_PATH = "E:\\@\\1\\Downloads\\BundleFiles"
+BUNDLES_PATH = r"E:\BlueArchive\YostarGames\BlueArchive_JP\BlueArchive_Data\StreamingAssets\AssetBundles"
 """
 bundle文件目录
 """
@@ -41,10 +41,10 @@ MAX_DEPTH = 100
 
 CONTAINER_RECORD = True
 
-RECORDER_EXTERNAL = False
-RECORDER_HASH_INFO = False
-RECORDER_TRACK_INFO = False
-RECORDER_TRACK_VISUALIZATION = False
+RECORDER_EXTERNAL = True
+RECORDER_HASH_INFO = True
+RECORDER_TRACK_INFO = True
+RECORDER_TRACK_VISUALIZATION = True
 
 PREFABS_MODE = True
 

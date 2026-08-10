@@ -136,7 +136,7 @@ class Timeline(ContainerObject):
         if len(PPtr_mapping := generic_bindings.pptrCurveMapping) > 0:
             for index, pptr in enumerate(PPtr_mapping):
                 if pptr.m_PathID != 0:
-                    iden = (dependencies[pptr.m_FileID - 1] if pptr.m_FileID > 0 else node.cab) + pptr.m_PathID
+                    iden = (dependencies[pptr.m_FileID - 1] if pptr.m_FileID > 0 else node.cab) + str(pptr.m_PathID)
                     if target := nodes_dict.get(iden):
                         textures[index] = target.name
                     else:
@@ -195,7 +195,7 @@ class Timeline(ContainerObject):
                 binding = generic_bindings[curve_index]
                 if binding['isPPtrCurve']:
                     if len(curve) > 0:
-                        binding['initState'] = curve[0][3]
+                        binding['initState'] = curve[0]['data'][3]
                     for i in range(1, len(curve)):
                         binding['frames'].append({
                             'time': curve[i]['time'],

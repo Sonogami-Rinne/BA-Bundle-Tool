@@ -29,7 +29,7 @@ class TrackVisualizationRecorder(Recorder):
             node_info = node.get_node()
             self.node_map[identification] = {
                 'id': identification,
-                'label': node_info[0],
+                'label': node_info[0].replace('(Clone)', ''),
                 'shape': 'dot',
                 'color': node_info[1],
                 'title': node_info[2]
@@ -48,7 +48,7 @@ class TrackVisualizationRecorder(Recorder):
                     }
                     self.node_ids.append(edge[0])
 
-                self.network.add_edge(identification, edge[0], label=edge[1], title=edge[1],
+                self.network.add_edge(identification, edge[0], label=edge[1][2:] if edge[1].startswith('m_') else edge[1], title=edge[1],
                                       color="#6E6E6E", width=2, arrows="to")
         self.network.nodes = list(self.node_map.values())
         self._save_data(stu)
