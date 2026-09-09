@@ -5,7 +5,7 @@ import infoJsonManager
 import util
 from containerObjects.AmbientAudio import AmbientEvent
 from containerObjects.GameObject import GameObject
-from containerObjects.InteractiveConfig import InteractiveConfig
+from containerObjects.InteractionConfig import InteractionConfig
 from containerObjects.Particle import Particle
 from containerObjects.PostProcessing import PostProcessing
 from containerObjects.SpineClips import SpineClips
@@ -19,12 +19,12 @@ class Container:
         self.container_objects = {
             'GameObject': GameObject(self),
             'SpineClips': SpineClips(self),
-            'InteractiveConfig': InteractiveConfig(self),
+            'InteractionConfig': InteractionConfig(self),
             'PostProcessing': PostProcessing(self),
             'SpriteRender': SpriteRender(self),
             'Particle': Particle(self),
             'Timeline': Timeline(self),
-            'AmbientEvent': AmbientEvent(self),
+            # 'AmbientEvent': AmbientEvent(self),
             'ResourceJS': ResourceJS(self),
         } if util.CONTAINER_RECORD else {}
         self.info_json_manager: infoJsonManager.InfoJsonManger = info_json_manager

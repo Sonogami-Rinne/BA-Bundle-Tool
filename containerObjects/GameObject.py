@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 
+import util
 from containerObjects.ContainerObject import ContainerObject
 from typeId import ClassIDType
 from linkedList import LinkedList
@@ -27,6 +28,9 @@ class GameObject(ContainerObject):
         while linked_list.head:
             for node in linked_list.walk_through():
                 node.hierarchy += (node.game_object.name,)
+                # matrix = util.get_transform(node.game_object)
+                # translate, rotation, scale = util.decompose_2d_transform(matrix)
+                # self.data[node.game_object.get_identification()] = ('/'.join(node.hierarchy), translate, rotation, scale)
                 self.data[node.game_object.get_identification()] = '/'.join(node.hierarchy)
                 # self.data.append('/'.join(node.hierarchy))
                 to_adds = []

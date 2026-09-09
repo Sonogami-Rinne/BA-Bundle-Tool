@@ -297,6 +297,7 @@ class Particle(ContainerObject):
         #  发射器模块
         sub_module = obj.EmissionModule
         data['emissionModule'] = {
+            'enabled': sub_module.enabled,
             'rateOverDistance': Particle.process_min_max_curve(sub_module.rateOverDistance),  # 每个移动单位发射的粒子数量
             'rateOverTime': Particle.process_min_max_curve(sub_module.rateOverTime),  # 每个时间单位发射的粒子数量
             'bursts': [
@@ -316,11 +317,13 @@ class Particle(ContainerObject):
             data['forceModule'] = {
                 'x': Particle.process_min_max_curve(sub_module.x),
                 'y': Particle.process_min_max_curve(sub_module.y),
+                'randomizePerFrame': sub_module.randomizePerFrame
             }
 
         #  初始化模块
         sub_module = obj.InitialModule
         data['initialModule'] = {
+            'enabled': sub_module.enabled,
             'emitterVelocity': util.to_tuple(sub_module.customEmitterVelocity),
             'maxNum': sub_module.maxNumParticles,
             'startColor': Particle.process_min_max_gradient(sub_module.startColor),
@@ -403,6 +406,7 @@ class Particle(ContainerObject):
         sub_module = obj.ShapeModule
         shape = sub_module.type
         data['shapeModule'] = {
+            'enabled': sub_module.enabled,
             'shape': shape,
             #  这些是忽略的部分
 
@@ -414,7 +418,7 @@ class Particle(ContainerObject):
             # 'bilinearFiltering': sub_module.BilinearFiltering,
             # 'alignToDirection': sub_module.alignToDirection,
             'position': util.to_tuple(sub_module.m_Position),
-            'rotation': util.to_tuple(sub_module.m_Rotation),
+            'rotation': util.euler_to_quaternion(util.to_tuple(sub_module.m_Rotation)),
             'scale': util.to_tuple(sub_module.m_Scale),
             'randomizeDirectionAmount': sub_module.randomDirectionAmount,  # 随机方向乘这个和1-这个乘原本方向混合
             'randomizePositionAmount': sub_module.randomPositionAmount,
@@ -555,12 +559,24 @@ class Particle(ContainerObject):
 
         material_data = []
         material_main_tex = []
+        material_tex = {}
         for material in obj.m_Materials:
             iden = (node.dependencies[material.m_FileID - 1] if material.m_FileID != 0 else node.cab) + str(
                 material.m_PathID)
             if target := nodes_dict.get(iden):
                 data_dict = target.obj.object_reader.read_typetree()
                 material_data.append(data_dict)
+                shader_info = data_dict['m_Shader']
+                if (pathID := shader_info['m_PathID']) != 0:
+                    iden = (target.dependencies[shader_info['m_FileID'] - 1] if shader_info[
+                                                                                'm_FileID'] > 0 else target.cab) + str(
+                        pathID)
+                    if _target := nodes_dict.get(iden):
+                        with open('D:\\2.txt', 'w+') as f:
+                            f.write(_target.obj.export())
+                        data_dict['shader_id'] = iden
+                        data_dict['shader_name'] = _target.name
+
                 for tex in data_dict['m_SavedProperties']['m_TexEnvs']:
                     texture = tex[1]['m_Texture']
                     if texture['m_PathID'] != 0:
@@ -571,6 +587,7 @@ class Particle(ContainerObject):
                             self.textures.append(_target)
                             if tex[0] == '_MainTex':
                                 material_main_tex.append(_target.name)
+                            material_tex[tex[0]] = _target.name
                     # if tex[0] == '_MainTex':
                     #     texture = tex[1]['m_Texture']
                     #     if texture['m_PathID'] != 0:
@@ -589,6 +606,7 @@ class Particle(ContainerObject):
                     #         self.textures.append(_target)
         item['materials'] = material_data
         item['materials_MainTex'] = material_main_tex
+        item['material_Tex'] = material_tex
 
         return item
 
@@ -606,6 +624,11 @@ class Particle(ContainerObject):
             data['rendererModule'] = self.process_particle_renderer(_node)
             data['name'] = node.name
             data['gameObject'] = game_object_container.get_index(parent.get_identification())
+            matrix = util.get_transform(parent)
+            translate, rotation, scale = util.decompose_2d_transform(matrix)
+            data['translate'] = translate
+            data['rotation'] = rotation
+            data['scale'] = scale
             #  self.data[parent.get_identification()] = data
             self.data.append(data)
             self.data_keys.append(node.get_identification())

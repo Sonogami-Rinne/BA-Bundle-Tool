@@ -54,21 +54,15 @@ class SpineClips(ContainerObject):
                         game_object = _node.children['m_GameObject']
 
                 assert game_object
-                # translate, rotation, scale = util.decompose_2d_transform(util.get_transform(game_object))
+                translate, _, _ = util.decompose_2d_transform(util.get_transform(game_object))
 
                 self.data['skeletons'].append({
                     'defaultMix': round(skeleton_node.obj.defaultMix, 2),
                     # 'scale': skeleton_node.obj.scale,
-                    'scale': 1,
                     'skeleton': skeleton_node.children['skeletonJSON'],
                     'atlas': atlas,
                     'gameObject': game_object_container.get_index(game_object.get_identification()),
-                    # 'transform': {
-                    #     'translate': translate,
-                    #     'rotation': rotation,
-                    #     'scale': scale
-                    # },
-                    'viewBounds': None
+                    'translate': translate
                 })
 
             else:

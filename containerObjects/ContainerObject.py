@@ -2,6 +2,8 @@ import json
 import os.path
 import pathlib
 
+from CJSONEncoder import CJSONEncoder
+
 
 class ContainerObject:
     def __init__(self, parent_container):
@@ -32,7 +34,7 @@ class ContainerObject:
         """
         base_path.mkdir(parents=True, exist_ok=True)
         with open(os.path.join(base_path, self.__class__.__name__ + '.json'), 'w+', encoding='utf-8') as f:
-            json.dump(self.data, f, indent=2)
+            json.dump(self.data, f, indent=2, cls=CJSONEncoder)
 
         self.clear()
 

@@ -1,3 +1,4 @@
+import math
 import os.path
 import typing
 import zlib
@@ -42,9 +43,9 @@ MAX_DEPTH = 100
 CONTAINER_RECORD = True
 
 RECORDER_EXTERNAL = True
-RECORDER_HASH_INFO = True
-RECORDER_TRACK_INFO = True
-RECORDER_TRACK_VISUALIZATION = True
+RECORDER_HASH_INFO = False
+RECORDER_TRACK_INFO = False
+RECORDER_TRACK_VISUALIZATION = False
 
 PREFABS_MODE = True
 
@@ -174,6 +175,21 @@ def decompose_2d_transform(matrix_4x4):
 
     return (round(tx, 2), round(ty, 2)), round(theta, 4), (round(sx, 2), round(sy, 2))
 
+def euler_to_quaternion(li: tuple[float, float, float]):
+    cz = math.cos(li[0] * 0.5)
+    sz = math.sin(li[0] * 0.5)
+    cx = math.cos(li[1] * 0.5)
+    sx = math.sin(li[1] * 0.5)
+    cy = math.cos(li[2] * 0.5)
+    sy = math.sin(li[2] * 0.5)
+
+    # 四元数分量（公式推导：q = q_y * q_x * q_z）
+    w = cx * cy * cz + sx * sy * sz
+    x = sx * cy * cz + cx * sy * sz
+    y = cx * sy * cz - sx * cy * sz
+    z = cx * cy * sz - sx * sy * cz
+
+    return x, y, z, w
 
 def get_transform(base_node):
     """
@@ -184,7 +200,7 @@ def get_transform(base_node):
     if (transform_matrix := base_node.process_data) is None:
         node = base_node.transform
         transform_stack = [node]
-        parent_transform_node = node.children['m_Father']  # 有些奇怪,但m_Father确实是由该节点出去的
+        parent_transform_node = node.children.get('m_Father', None)
         while parent_transform_node and parent_transform_node.process_data is None:
             transform_stack.append(parent_transform_node)
             parent_transform_node = parent_transform_node.children.get('m_Father')
@@ -201,6 +217,45 @@ def get_transform(base_node):
             transform_node.process_data = transform_matrix
 
     return transform_matrix
+
+def better_print(content, indent_num=4):
+    after = ''
+    consistent_blank_line_count = 0
+    base_indent = ' ' * indent_num
+    cur_indent = ''
+
+    def process(sub_line):
+        ls = sub_line.strip()
+        nonlocal consistent_blank_line_count
+        nonlocal after
+        nonlocal cur_indent
+        if len(ls) == 0:
+            consistent_blank_line_count += 1
+            if consistent_blank_line_count > 2:
+                return
+            after += '\n'
+            return
+        else:
+            consistent_blank_line_count = 0
+        if ls.startswith('{'):
+            after += cur_indent + '{\n'
+            cur_indent += base_indent
+            ls = ls[1:].strip()
+            if len(ls) > 0:
+                process(ls)
+        elif ls.startswith('}'):
+            cur_indent = cur_indent[:-indent_num]
+            after += cur_indent + '}\n'
+            ls = ls[1:].strip()
+            if len(ls) > 0:
+                process(ls)
+        else:
+            after += cur_indent + ls + '\n'
+
+    for line in content.split('\n'):
+        process(line)
+
+    return after
 
 
 class CLogging:

@@ -6,22 +6,22 @@ from typeId import ClassIDType
 from util import to_tuple
 
 
-class InteractiveConfig(ContainerObject):
+class InteractionConfig(ContainerObject):
 
     def fetch_data(self, item):
         spine_container = self.parent_container.container_objects['SpineClips']
         game_object_container = self.parent_container.container_objects['GameObject']
         obj = item.obj
         bone = item.children['Bone'].game_object
-        bone_transform = util.get_transform(bone)
-        bone_translate, _, _ = util.decompose_2d_transform(bone_transform)
+        # bone_transform = util.get_transform(bone)
+        # bone_translate, bone_theta, _ = util.decompose_2d_transform(bone_transform)
         result = {
             # 'offset': to_tuple(obj.BoneCenterOffset),
             'followDragSpeed': obj.FollowDragSpeed01,
-            # 'followReleaseSpeed': obj.FollowReleaseSpeed01,
+            'followReleaseSpeed': obj.FollowReleaseSpeed01,
             # 'bounds': (obj.MinLocalPos.x, obj.MinLocalPos.y, obj.MaxLocalPos.x, obj.MaxLocalPos.y),
             # 'initPos': (obj.OrigLocalPos.x, obj.OrigLocalPos.y),
-            # 'delay': obj.TriggerDelay,
+            'delay': obj.TriggerDelay,
             'bounds': {
                 'minLocalX': round(obj.MinLocalPos.y, 4),
                 'minLocalY': round(obj.MinLocalPos.x, 4),
@@ -35,7 +35,8 @@ class InteractiveConfig(ContainerObject):
             'bone': {
                 'name': bone.name,
                 'gameObject': game_object_container.get_index(bone.get_identification()),
-                'translate': bone_translate
+                # 'translate': bone_translate,
+                # 'theta': bone_theta
             }
             # 'bone': (bone.name, game_object_container.get_index(bone.get_identification()), bone_translate)
         }
@@ -56,35 +57,25 @@ class InteractiveConfig(ContainerObject):
 
         for identification, node in self.nodes.items():
             node_data = {}
+            
+            _base_transform = util.get_transform(node)
+            translate, rotation, scale = util.decompose_2d_transform(_base_transform)
             for _, component_data in node.children.items():
                 component_obj = component_data.obj
 
-                # _base_transform = util.get_transform(node)
-                # _, rotation, scale = util.decompose_2d_transform(_base_transform)
-
                 if component_data.type == ClassIDType.BoxCollider:
+                    obj = component_data.obj
+                    #m_Size, m_Center
                     node_data['collider'] = {
-                        'centerX': 0,
-                        'centerY': 0,
-                        'scaleX': 1,
-                        'scaleY': 1,
-                        'halfWidth': .05,
-                        'halfHeight': .05,
-                        'theta': 0
+                        'X': obj.m_Center.x + translate[0],
+                        'Y': obj.m_Center.y + translate[1],
+                        'scaleX': scale[0],
+                        'scaleY': scale[1],
+                        'halfWidth': obj.m_Size.x / 2,
+                        'halfHeight': obj.m_Size.y / 2,
+                        'theta': rotation
                     }
-                    # translation_matrix = np.eye(4)
-                    # translation_matrix[:3, 3] = np.asarray(util.to_tuple(component_obj.m_Center))
-                    # translate = _base_transform @ translation_matrix
-                    #
-                    # node_data['collider'] = {
-                    #     'centerX': translate[0, 3],
-                    #     'centerY': translate[1, 3],
-                    #     'halfWidth': component_obj.m_Size.x / 2,
-                    #     'halfHeight': component_obj.m_Size.y / 2,
-                    #     'theta': rotation,
-                    #     'scaleX': scale[0],
-                    #     'scaleY': scale[1]
-                    # }
+
                 elif hasattr(component_obj, 'IngClip'):
                     node_data['data'] = self.fetch_data(component_data)
 

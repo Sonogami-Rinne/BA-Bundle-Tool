@@ -67,7 +67,7 @@ def run_files_in_single_bundle(bundle):
         for path, data in cab_data.items():
             file_name = getattr(data[1], 'm_Name', 'Unknown')
             cur_file[0] = file_name
-            util.CLogging.info(f'当前:{cur_file[0]}')
+            # util.CLogging.info(f'当前:{cur_file[0]}')
             single((cab_name, path, data[0], file_name))
 
             container.notify_bulk(cur_file[0])

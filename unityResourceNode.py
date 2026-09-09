@@ -50,6 +50,8 @@ class UnityResourceNode:
         self.obj = self.file_manager.get_obj(self.cab, self.path_id)
         if self.obj is None:
             return False
+        if self.type == ClassIDType.Shader:
+            self.name = self.obj.m_ParsedForm.m_Name
 
         if (dependencies := self.info_json_manager.get_dependencies(self.cab)) is None:
             if (len(externals := self.obj.assets_file.externals) > 0 and isinstance(externals[0], str)) or len(
