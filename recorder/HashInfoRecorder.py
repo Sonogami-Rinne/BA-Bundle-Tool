@@ -1,5 +1,5 @@
 import util
-from recorder.Recorder import Recorder
+from recorder.BaseRecorder import BaseRecorder
 from typeId import ClassIDType, inverse_map
 import inspect
 
@@ -10,7 +10,7 @@ MAX_DEPTH = 9
 
 
 
-class HashInfoRecorder(Recorder):
+class HashInfoRecorder(BaseRecorder):
     """
     只记录属性的hash,GameObject的运行时动态记录.整个过程保存一次
     """

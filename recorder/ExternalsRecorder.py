@@ -1,7 +1,7 @@
-from recorder.Recorder import Recorder
+from recorder.BaseRecorder import BaseRecorder
 
 
-class ExternalsRecorder(Recorder):
+class ExternalsRecorder(BaseRecorder):
     """
     以该文件为起点的指定直径(半径?)上限的最大有向图的所有节点的bundle.由于单次遍历就是遍历该文件的所有子级，故此处就是简单的遍历所有节点
     """

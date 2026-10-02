@@ -7,8 +7,106 @@ from typeId import ClassIDType
 from shapeId import ShapeId
 
 
-class Particle(ContainerObject):
+class ParticleSystemVertexStream:
+    Position = 0
+    Normal = 1
+    Tangent = 2
+    Color = 3
+    UV = 4
+    UV2 = 5
+    UV3 = 6
+    UV4 = 7
+    AnimBlend = 8
+    AnimFrame = 9
+    Center = 10
+    VertexID = 11
+    SizeX = 12
+    SizeXY = 13
+    SizeXYZ = 14
+    Rotation = 15
+    Rotation3D = 16
+    RotationSpeed = 17
+    RotationSpeed3D = 18
+    Velocity = 19
+    Speed = 20
+    AgePercent = 21
+    InvStartLifetime = 22
+    StableRandomX = 23
+    StableRandomXY = 24
+    StableRandomXYZ = 25
+    StableRandomXYZW = 26
+    VaryingRandomX = 27
+    VaryingRandomXY = 28
+    VaryingRandomXYZ = 29
+    VaryingRandomXYZW = 30
+    Custom1X = 31
+    Custom1XY = 32
+    Custom1XYZ = 33
+    Custom1XYZW = 34
+    Custom2X = 35
+    Custom2XY = 36
+    Custom2XYZ = 37
+    Custom2XYZW = 38
+    NoiseSumX = 39
+    NoiseSumXY = 40
+    NoiseSumXYZ = 41
+    NoiseImpulseX = 42
+    NoiseImpulseXY = 43
+    NoiseImpulseXYZ = 44
+    MeshIndex = 45
 
+
+ParticleSystemVertexStreamInverseMap = {
+    0: ('Position',),
+    1: ('Normal',),
+    2: ('Tangent',),
+    3: ('Color',),
+    4: ('UV', 2),
+    5: ('UV2', 2),
+    6: ('UV3', 2),
+    7: ('UV4', 2),
+    8: ('AnimBlend', 1),
+    9: ('AnimFrame', 1),
+    10: ('Center', 3),
+    11: ('VertexID', 1),
+    12: ('SizeX', 1),
+    13: ('SizeXY', 2),
+    14: ('SizeXYZ', 3),
+    15: ('Rotation', 1),
+    16: ('Rotation3D', 3),
+    17: ('RotationSpeed', 1),
+    18: ('RotationSpeed3D', 3),
+    19: ('Velocity', 3),
+    20: ('Speed', 1),
+    21: ('AgePercent', 1),
+    22: ('InvStartLifetime', 1),
+    23: ('StableRandomX', 1),
+    24: ('StableRandomXY', 2),
+    25: ('StableRandomXYZ', 3),
+    26: ('StableRandomXYZW', 4),
+    27: ('VaryingRandomX', 1),
+    28: ('VaryingRandomXY', 2),
+    29: ('VaryingRandomXYZ', 3),
+    30: ('VaryingRandomXYZW', 4),
+    31: ('Custom1X', 1),
+    32: ('Custom1XY', 2),
+    33: ('Custom1XYZ', 3),
+    34: ('Custom1XYZW', 4),
+    35: ('Custom2X', 1),
+    36: ('Custom2XY', 2),
+    37: ('Custom2XYZ', 3),
+    38: ('Custom2XYZW', 4),
+    39: ('NoiseSumX', 1),
+    40: ('NoiseSumXY', 2),
+    41: ('NoiseSumXYZ', 3),
+    42: ('NoiseImpulseX', 1),
+    43: ('NoiseImpulseX', 2),
+    44: ('NoiseImpulseX', 3),
+    45: ('MeshIndex', 1)
+}
+
+
+class Particle(ContainerObject):
 
     def __process_cone__(self, obj, nodes_dict, node):
         return {
@@ -151,7 +249,7 @@ class Particle(ContainerObject):
                 'maxColor': util.to_tuple(obj.maxColor),
             }
         elif state == 3:
-            return{
+            return {
                 'state': 3,
                 'minGradient': Particle.process_gradient(obj.minGradient),
                 'maxGradient': Particle.process_gradient(obj.maxGradient),
@@ -247,14 +345,15 @@ class Particle(ContainerObject):
         super().__init__(parent_container)
         self.textures = []
         self.meshes = []
+        self.hlsls = {}
+        self.glsls = {}
 
     def process_particle_system(self, node):
         obj = node.obj
         data = {}
         nodes_dict = self.parent_container.nodes_dict
         #  忽略的模块
-        for module_name in ('CollisionModule', 'ExternalForcesModule', 'InheritVelocityModule', 'LightsModule',
-                            'SubModule', 'TrailModule', 'TriggerModule'):
+        for module_name in ('CollisionModule', 'ExternalForcesModule', 'InheritVelocityModule', 'LightsModule','TriggerModule'):
             sub_module = getattr(obj, module_name)
             if sub_module.enabled:
                 util.CLogging.warn(f'Ignored module {module_name}')
@@ -359,7 +458,7 @@ class Particle(ContainerObject):
         #  柏林噪音
         sub_module = obj.NoiseModule
         if sub_module.enabled:
-            data['noise'] = {
+            data['noiseModule'] = {
                 'damping': sub_module.damping,  # 启用此属性后，强度与频率成正比。将这些值绑在一起意味着可在保持相同行为但具有不同大小的同时缩放噪声场。
                 'frequency': sub_module.frequency,
                 'octaveMultiplier': sub_module.octaveMultiplier,  # 强度逐层变化
@@ -418,7 +517,7 @@ class Particle(ContainerObject):
             # 'bilinearFiltering': sub_module.BilinearFiltering,
             # 'alignToDirection': sub_module.alignToDirection,
             'position': util.to_tuple(sub_module.m_Position),
-            'rotation': util.euler_to_quaternion(util.to_tuple(sub_module.m_Rotation)),
+            'rotation': util.to_tuple(sub_module.m_Rotation),
             'scale': util.to_tuple(sub_module.m_Scale),
             'randomizeDirectionAmount': sub_module.randomDirectionAmount,  # 随机方向乘这个和1-这个乘原本方向混合
             'randomizePositionAmount': sub_module.randomPositionAmount,
@@ -432,10 +531,11 @@ class Particle(ContainerObject):
         sub_module = obj.SizeBySpeedModule
         if sub_module.enabled:
             data['sizeBySpeedModule'] = {
-                'curve': Particle.process_min_max_curve(sub_module.curve) if not sub_module.separateAxes else Particle.process_min_max_curve(sub_module.z),
+                'curve': Particle.process_min_max_curve(
+                    sub_module.curve) if not sub_module.separateAxes else Particle.process_min_max_curve(sub_module.x),
                 'range': util.to_tuple(sub_module.range),
-                # 'separateAxis': sub_module.separateAxes,
-                # 'curveY': Particle.process_min_max_curve(sub_module.y),
+                'separateAxis': sub_module.separateAxes,
+                'curveY': Particle.process_min_max_curve(sub_module.y),
                 # 'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
@@ -444,7 +544,7 @@ class Particle(ContainerObject):
         if sub_module.enabled:
             data['sizeModule'] = {
                 'curve': Particle.process_min_max_curve(sub_module.curve),
-                'separateAxes': sub_module.separateAxes,
+                'separateAxis': sub_module.separateAxes,
                 'curveY': Particle.process_min_max_curve(sub_module.y),
                 # 'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
@@ -509,11 +609,45 @@ class Particle(ContainerObject):
 
             data['UVModule']['sprites'] = sprites
 
+        sub_module = obj.TrailModule
+        if sub_module.enabled:
+            data['trailModule'] = {
+                'attachRibbonsToTransform': sub_module.attachRibbonsToTransform,
+                'colorOverLifetime': Particle.process_min_max_gradient(sub_module.colorOverLifetime),
+                'colorOverTrail': Particle.process_min_max_gradient(sub_module.colorOverTrail),
+                'dieWithParticles': sub_module.dieWithParticles,
+                'public': sub_module.inheritParticleColor,
+                'lifetime': Particle.process_min_max_curve(sub_module.lifetime),
+                'minVertexDistance': sub_module.minVertexDistance,
+                'mode': sub_module.mode,
+                'ratio': sub_module.ratio,
+                'ribbonCount': sub_module.ribbonCount,
+                'sizeAffectsLifetime': sub_module.sizeAffectsLifetime,
+                'sizeAffectsWidth': sub_module.sizeAffectsWidth,
+                'textureMode': sub_module.textureMode,
+                'widthOverTrail': Particle.process_min_max_curve(sub_module.widthOverTrail)
+            }
+
+        sub_module = obj.SubModule
+        if sub_module.enabled:
+            sub_emitters = []
+            data['subModule'] = sub_emitters
+            for sub_emitter in sub_module.subEmitters:
+                iden = (node.dependencies[sub_emitter.emitter.m_FileID - 1] if sub_emitter.emitter.m_FileID > 0 else node.cab) + str(
+                        sub_emitter.emitter.m_PathID)
+                if tar := nodes_dict.get(iden):
+                    emitter_info = {
+                        'emitProbability': sub_emitter.emitProbability,
+                        'properties': sub_emitter.properties,
+                        'type': sub_emitter.type
+                    }
+
         return data
 
     def process_particle_renderer(self, node):
         nodes_dict = self.parent_container.nodes_dict
         obj = node.obj
+
         # self.renderers.append(node)
         item = {
             'renderMode': obj.m_RenderMode,  # BillBoard, Stretch, HorizontalBillBoard, VerticalBillBoard, Mesh, None
@@ -557,56 +691,42 @@ class Particle(ContainerObject):
 
         item['meshes'] = meshes
 
-        material_data = []
-        material_main_tex = []
-        material_tex = {}
+        material_main_texs = []
+        material_infos = []
+        material_tex_infos = []
         for material in obj.m_Materials:
-            iden = (node.dependencies[material.m_FileID - 1] if material.m_FileID != 0 else node.cab) + str(
-                material.m_PathID)
-            if target := nodes_dict.get(iden):
-                data_dict = target.obj.object_reader.read_typetree()
-                material_data.append(data_dict)
-                shader_info = data_dict['m_Shader']
-                if (pathID := shader_info['m_PathID']) != 0:
-                    iden = (target.dependencies[shader_info['m_FileID'] - 1] if shader_info[
-                                                                                'm_FileID'] > 0 else target.cab) + str(
-                        pathID)
-                    if _target := nodes_dict.get(iden):
-                        with open('D:\\2.txt', 'w+') as f:
-                            f.write(_target.obj.export())
-                        data_dict['shader_id'] = iden
-                        data_dict['shader_name'] = _target.name
+            material_info, material_main_tex, material_tex_info, hlsl_info, glsl_info, material_node = self.process_material(node, material.m_FileID, material.m_PathID)
+            if len(material_info) == 0:
+                continue
+            material_infos.append(material_info)
+            material_main_texs.extend(material_main_tex)
+            material_tex_infos.append(material_tex_info)
+            self.textures.extend(material_node)
+            # self.hlsls[hlsl_info[0]] = hlsl_info[1]
+            if hlsl_info[1] is not None:
+                self.hlsls[hlsl_info[0]] = hlsl_info[1]
+            if glsl_info[1] is not None:
+                self.glsls[glsl_info[0]] = glsl_info
 
-                for tex in data_dict['m_SavedProperties']['m_TexEnvs']:
-                    texture = tex[1]['m_Texture']
-                    if texture['m_PathID'] != 0:
-                        iden = (target.dependencies[texture['m_FileID'] - 1] if texture[
-                                                                                    'm_FileID'] > 0 else target.cab) + str(
-                            texture['m_PathID'])
-                        if _target := nodes_dict.get(iden):
-                            self.textures.append(_target)
-                            if tex[0] == '_MainTex':
-                                material_main_tex.append(_target.name)
-                            material_tex[tex[0]] = _target.name
-                    # if tex[0] == '_MainTex':
-                    #     texture = tex[1]['m_Texture']
-                    #     if texture['m_PathID'] != 0:
-                    #         iden = (target.dependencies[texture['m_FileID'] - 1] if texture[
-                    #                                                                     'm_FileID'] > 0 else target.cab) + str(
-                    #             texture['m_PathID'])
-                    #         if target := nodes_dict.get(iden):
-                    #             material_main_tex.append(target.name)
-                    #             break
-                    # texture = tex[1]['m_Texture']
-                    # if texture['m_PathID'] != 0:
-                    #     iden = (target.dependencies[texture['m_FileID'] - 1] if texture[
-                    #                                                                 'm_FileID'] > 0 else node.cab) + str(
-                    #         texture['m_PathID'])
-                    #     if (_target := nodes_dict.get(iden)) and _target not in self.textures:
-                    #         self.textures.append(_target)
-        item['materials'] = material_data
-        item['materials_MainTex'] = material_main_tex
-        item['material_Tex'] = material_tex
+        # item['textures'] = texture_nodes
+        item['materialInfo'] = material_infos
+        item['materialsMainTex'] = material_main_texs
+        item['texInfo'] = material_tex_infos
+
+        if obj.m_UseCustomVertexStreams:
+            texcoord_stream_infos = []
+            cur = 0
+            for stream_index in obj.m_VertexStreams:
+                if stream_index >= 4:
+                    stream_info = ParticleSystemVertexStreamInverseMap[stream_index]
+                    texcoord_stream_infos.append({
+                        'index': stream_index,
+                        'offset': cur,
+                        'name': stream_info[0],
+                        'size': stream_info[1]
+                    })
+                    cur += stream_info[1]
+            item['additionalTexcoordInfo'] = texcoord_stream_infos
 
         return item
 
@@ -622,7 +742,7 @@ class Particle(ContainerObject):
                     obj = _node.obj
                     break
             data['rendererModule'] = self.process_particle_renderer(_node)
-            data['name'] = node.name
+            data['name'] = parent.name
             data['gameObject'] = game_object_container.get_index(parent.get_identification())
             matrix = util.get_transform(parent)
             translate, rotation, scale = util.decompose_2d_transform(matrix)
@@ -639,20 +759,45 @@ class Particle(ContainerObject):
 
     def save_data(self, base_path):
         _path = os.path.join(base_path, 'mesh')
-        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
+        os.makedirs(_path, exist_ok=True)
         for mesh in self.meshes:
             with open(os.path.join(_path, mesh.name + '.obj'), 'wt', newline='') as f:
                 f.write(mesh.obj.export())
 
         _path = os.path.join(base_path, 'image')
-        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
+        os.makedirs(_path, exist_ok=True)
         for tex in self.textures:
             path = os.path.join(_path, f"{tex.name}.png")
             tex.obj.image.save(path)
 
+        _path = os.path.join(base_path, 'rawShader')
+        os.makedirs(_path, exist_ok=True)
+        for k, v in self.hlsls.items():
+            _shader_path = k
+            if '/' in k:
+                _shader_path = k[:k.rindex('/')]
+            _shader_path = os.path.join(_path, _shader_path)
+            os.makedirs(_shader_path, exist_ok=True)
+            with open(os.path.join(_path, k + '.shader'), 'w+', encoding='utf-8') as f:
+                f.write(v)
+        _path = os.path.join(base_path, 'shader')
+        os.makedirs(_path, exist_ok=True)
+        for k, v in self.glsls.items():
+            _shader_path = k
+            if '/' in k:
+                _shader_path = k[:k.rindex('/')]
+            _shader_path = os.path.join(_path, _shader_path)
+            os.makedirs(_shader_path, exist_ok=True)
+            with open(os.path.join(_path, k + '.vert'), 'w+', encoding='utf-8') as f:
+                f.write(v[1])
+            with open(os.path.join(_path, k + '.frag'), 'w+', encoding='utf-8') as f:
+                f.write(v[2])
         super().save_data(base_path)
 
     def clear(self):
         super().clear()
         self.meshes.clear()
         self.textures.clear()
+        self.hlsls.clear()
+        self.glsls.clear()
+

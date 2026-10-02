@@ -1,3 +1,9 @@
+"""
+
+NOTE
+
+This file is copied from Unitypy 1.20.26
+"""
 from __future__ import annotations
 
 import re
@@ -152,31 +158,6 @@ def ConvertSerializedPass(m_Passe: SerializedPass, platforms: List[int], shaderP
         else:
             sb.append(ConvertSerializedShaderState(m_Passe.m_State))
 
-            if len(m_Passe.progVertex.m_SubPrograms) > 0:
-                sb.append('Program "vp" {\n')
-                sb.append(ConvertSerializedSubPrograms(m_Passe.progVertex.m_SubPrograms, platforms, shaderPrograms))
-                sb.append("}\n")
-
-            if len(m_Passe.progFragment.m_SubPrograms) > 0:
-                sb.append('Program "fp" {\n')
-                sb.append(ConvertSerializedSubPrograms(m_Passe.progFragment.m_SubPrograms, platforms, shaderPrograms))
-                sb.append("}\n")
-
-            if len(m_Passe.progGeometry.m_SubPrograms) > 0:
-                sb.append('Program "gp" {\n')
-                sb.append(ConvertSerializedSubPrograms(m_Passe.progGeometry.m_SubPrograms, platforms, shaderPrograms))
-                sb.append("}\n")
-
-            if len(m_Passe.progHull.m_SubPrograms) > 0:
-                sb.append('Program "hp" {\n')
-                sb.append(ConvertSerializedSubPrograms(m_Passe.progHull.m_SubPrograms, platforms, shaderPrograms))
-                sb.append("}\n")
-
-            if len(m_Passe.progDomain.m_SubPrograms) > 0:
-                sb.append('Program "dp" {\n')
-                sb.append(ConvertSerializedSubPrograms(m_Passe.progDomain.m_SubPrograms, platforms, shaderPrograms))
-                sb.append("}\n")
-
         sb.append("}\n")
 
     return "".join(sb)
@@ -211,19 +192,19 @@ def ConvertSerializedSubPrograms(
 
                 platform = platforms[i]
 
-                if CheckGpuProgramUsable(platform, programKey):
-                    for subProgram in subPrograms:
-                        sb.append('SubProgram "{0} '.format(GetPlatformString(platform)))
-
-                        if isTier:
-                            sb.append("hw_tier{0:02} ".format(subProgram.m_ShaderHardwareTier))
-
-                        sb.append('" {\n')
-                        sb.append(shaderPrograms[i].m_SubPrograms[subProgram.m_BlobIndex].Export())
-
-                        sb.append("\n}\n")
-
-                    break
+                # if CheckGpuProgramUsable(platform, programKey):
+                #     for subProgram in subPrograms:
+                #         sb.append('SubProgram "{0} '.format(GetPlatformString(platform)))
+                #
+                #         if isTier:
+                #             sb.append("hw_tier{0:02} ".format(subProgram.m_ShaderHardwareTier))
+                #
+                #         sb.append('" {\n')
+                #         sb.append(shaderPrograms[i].m_SubPrograms[subProgram.m_BlobIndex].Export())
+                #
+                #         sb.append("\n}\n")
+                #
+                #     break
 
     return "".join(sb)
 
@@ -322,6 +303,49 @@ def ConvertSerializedProperties(m_PropInfo: SerializedProperties) -> str:
     )
 
 
+def ConvertSerializedPropertyToDict(m_Props: list) -> dict:
+    props = {}
+    for prop in m_Props:
+        prop_name = prop['m_Name']
+        _type = prop['m_Type']
+        default_value = None
+        if _type == SerializedPropertyType.kColor:
+            _type = 'Color'
+            default_value = (prop['m_DefValue[0]'], prop['m_DefValue[1]'], prop['m_DefValue[2]'], prop['m_DefValue[3]'])
+        elif _type == SerializedPropertyType.kVector:
+            _type = 'Vector'
+            default_value = (prop['m_DefValue[0]'], prop['m_DefValue[1]'], prop['m_DefValue[2]'], prop['m_DefValue[3]'])
+        elif _type == SerializedPropertyType.kFloat or _type == SerializedPropertyType.kRange:
+            _type = 'Float'
+            default_value = (prop['m_DefValue[0]'],)
+        elif _type == SerializedPropertyType.kTexture:
+            tex_dim = prop['m_DefTexture']['m_TexDim']
+            default_value = (prop['m_DefTexture']['m_DefaultName'],)
+            _type = 'Texture'
+            if tex_dim == TextureDimension.kTexDimAny:
+                _type += 'any'
+            elif tex_dim == TextureDimension.kTexDim2D:
+                _type += '2D'
+            elif tex_dim == TextureDimension.kTexDim3D:
+                _type += '3D'
+            elif tex_dim == TextureDimension.kTexDimCUBE:
+                _type += 'Cube'
+            elif tex_dim == TextureDimension.kTexDim2DArray:
+                _type += '2DArray'
+            elif tex_dim == TextureDimension.kTexDimCubeArray:
+                _type += 'CubeArray'
+            else:
+                raise ValueError('Unknown texture type')
+        else:
+            raise ValueError('Unknown property type')
+
+        props[prop_name] = {
+            'type': _type,
+            'value': default_value
+        }
+    return props
+
+
 def ConvertSerializedProperty(m_Prop: SerializedProperty) -> str:
     sb = ["[{0}] ".format(m_Attribute) for m_Attribute in m_Prop.m_Attributes]
     sb.append('{0} ("{1}", '.format(m_Prop.m_Name, m_Prop.m_Description))
@@ -365,7 +389,7 @@ def ConvertSerializedProperty(m_Prop: SerializedProperty) -> str:
     ]:
         sb.append(m_Prop.m_DefValue_0_)
     elif m_Prop.m_Type == SerializedPropertyType.kTexture:
-        sb.append('"{0}" {{ }}'.format(m_Prop.m_DefTexture.m_DefaultName))
+        sb.append('"{0}"'.format(m_Prop.m_DefTexture.m_DefaultName))
     else:
         raise ValueError(m_Prop.m_Type)
 

@@ -1,4 +1,5 @@
 import os.path
+import pathlib
 
 from containerObjects.ContainerObject import ContainerObject
 
@@ -18,15 +19,12 @@ class ResourceJS(ContainerObject):
                     f.write(f'"{file}": () => import("@assets/{file}?raw"),\n')
             for file in os.listdir(os.path.join(base_path, 'image')):
                 f.write(f'"{file}": () => import("@image/{file}?binary"),\n')
+            for folder in os.listdir(os.path.join(base_path, 'shader')):
+                folder_path = os.path.join(base_path, 'shader', folder)
+                for file in pathlib.Path(folder_path).rglob('*.vert'):
+                    file_name = '/'.join(file.parts[5:])
+                    file_name = file_name[:file_name.rindex('.')]
+                    f.write(f'"{folder}/{file_name}.vert": () => import("@shader/{folder}/{file_name}.vert?raw"),\n')
+                    f.write(f'"{folder}/{file_name}.frag": () => import("@shader/{folder}/{file_name}.frag?raw"),\n')
 
             f.write('}\nexport default resourceLoader;')
-
-        # with open(os.path.join(base_path, 'resource.js'), 'w+', encoding='utf-8') as f:
-        #     f.write('const resourceLoader = {\n')
-        #     for i in self.data['skel']:
-        #         f.write(f'"{i}": () => import("@skel/{i}?binary"),\n')
-        #     for i in self.data['atlas']:
-        #         f.write(f'"{i}": () => import("@atlas/{i}?raw"),\n')
-        #     for i in self.data['image']:
-        #         f.write(f'"{i}": () => import("@image/{i}?binary"),\n')
-        # self.clear()

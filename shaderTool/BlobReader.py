@@ -15,7 +15,7 @@ def blob_reader(buffers):
     pointer = 0
     count = struct.unpack('<i', buffers[0][pointer:pointer + 4])[0]
     pointer += 4
-    data['block_count'] = count
+    data['blockCount'] = count
     header_size = 12 * count + 4
     if len(buffers) > 1:
         assert header_size == len(buffers[0])
@@ -23,9 +23,9 @@ def blob_reader(buffers):
     for i in range(count):
         blocks.append(struct.unpack('<iii', buffers[0][pointer:pointer + 12]))
         pointer += 12
-    data['block_poi'] = blocks
+    data['blockPoi'] = blocks
     block_data = []
-    data['block_data'] = block_data
+    data['blockData'] = block_data
 
     for offset, length, buffer_index in blocks:
         buffer = buffers[buffer_index]
@@ -74,28 +74,31 @@ def blob_reader(buffers):
                     pointer += parameter_name_length
                     pointer += (0 if (pointer % 4 == 0) else (4 - pointer % 4))
                     pointer += 4
-                    parameter_row_count, parameter_dim, is_matrix, parameter_offset = struct.unpack('<iiqi', buffer[
+                    parameter_row_count, parameter_dim, is_matrix, parameter_array_length, parameter_offset = struct.unpack('<iiiii', buffer[
                                                                                                       pointer:pointer + 20])
                     pointer += 20
 
-                    para_offset = parameter_offset // 4
+                    para_offset = parameter_offset >> 2
                     # para_array_size = parameter_array_size if parameter_array_size > 0 else 1
-                    para_array_index = para_offset // 4
-                    para_array_sub_offset = para_offset % 4
-                    para_element_size = 4 * parameter_row_count * parameter_dim
+                    para_array_index = para_offset >> 2
+                    para_array_index_offset = para_offset & 0x3
+                    para_end_poi = para_offset + parameter_dim * parameter_row_count * max(1, parameter_array_length) - 1
+                    para_array_end_index = para_end_poi >> 2
+                    para_array_end_index_offset = para_end_poi & 0x3
                     parameter_info = {
                         'arrayIndex': para_array_index,
-                        'arrayIndexOffset': para_array_sub_offset,
-                        'arrayIndexValue': para_array_index << 2 | para_array_sub_offset,
-                        'elementSize': para_element_size,
+                        'arrayIndexOffset': para_array_index_offset,
+                        'arrayIndexValue': para_offset,
+                        'arrayEndIndex': para_array_end_index,
+                        'arrayEndIndexOffset': para_array_end_index_offset,
+                        'arrayEndIndexValue': para_end_poi,
                         'type': f'Matrix{parameter_row_count}x{parameter_dim}' if is_matrix else f'float{parameter_dim}',
                         'dim': parameter_dim,
                         'name': parameter_name,
-                        'offset': parameter_offset,
                         'isMatrix': is_matrix == 1,
-                        'rowCount': parameter_row_count
+                        'arrayLength': parameter_array_length,
+                        'rowCount': parameter_row_count,
                     }
-                    assert parameter_row_count == 1 or is_matrix
 
                     parameter_infos.append(parameter_info)
 
@@ -109,13 +112,13 @@ def blob_reader(buffers):
                     struct_name = struct.unpack(f'<{struct_name_length}s', buffer[pointer:pointer+struct_name_length])[0].decode('utf-8')
                     pointer += struct_name_length
                     pointer += (0 if (pointer % 4 == 0) else (4 - pointer % 4))
-                    struct_offset, unresolved2, struct_size, struct_item_counts = struct.unpack('<iiii', buffer[pointer:pointer+16])
+                    struct_offset, struct_array_length, struct_size, struct_item_counts = struct.unpack('<iiii', buffer[pointer:pointer+16])
                     pointer += 16
                     struct_items = []
                     struct_info = {
                         'name': struct_name,
                         'index': struct_offset,
-                        'unresolvedProperties': unresolved2,
+                        'arrayLength': struct_array_length,
                         'struct_size': struct_size,
                         'parameters': struct_items
                     }
@@ -126,32 +129,38 @@ def blob_reader(buffers):
                         item_name = struct.unpack(f'<{item_name_length}s', buffer[pointer:pointer+item_name_length])[0].decode('utf-8')
                         pointer += item_name_length
                         pointer += (0 if (pointer % 4 == 0) else (4 - pointer % 4))
-                        unresolved, item_row_count, item_dim, is_matrix, unresolved2, item_offset = struct.unpack('<iiiiii', buffer[pointer:pointer+24])
+                        unresolved, item_row_count, item_dim, is_matrix, item_array_length, item_offset = struct.unpack('<iiiiii', buffer[pointer:pointer+24])
                         pointer += 24
 
-                        item_offset = item_offset // 4  # 先转化为字
-                        item_array_index = item_offset // 4  # 一个array中float4,故数组下标还要除4
-                        item_array_sub_offset = item_offset % 4
-                        item_element_size = 4 * item_row_count * item_dim
+                        item_offset = item_offset >> 2  # 先转化为字
+                        item_array_index = item_offset >> 2  # 一个array中float4,故数组下标还要除4
+                        item_array_index_offset = item_offset & 0x3
+                        item_end_poi = item_offset + item_dim * max(item_array_length, 1) * item_row_count - 1
+                        item_array_end_index = item_end_poi >> 2
+                        item_array_end_index_offset = item_end_poi & 0x3
+
+                        # item_element_size = 4 * item_row_count * item_dim
                         item_info = {
                             'arrayIndex': item_array_index,
-                            'arrayIndexOffset': item_array_sub_offset,
-                            'arrayIndexValue': item_array_index << 2 | item_array_sub_offset,
-                            'elementSize': item_element_size,
+                            'arrayIndexOffset': item_array_index_offset,
+                            'arrayIndexValue': item_offset,
+                            'arrayEndIndex': item_array_end_index,
+                            'arrayEndIndexOffset': item_array_end_index_offset,
+                            'arrayEndIndexValue': item_end_poi,
                             'type': f'Matrix{item_row_count}x{item_dim}' if is_matrix else f'float{item_dim}',
                             'dim': item_dim,
                             'name': item_name,
-                            'offset': item_offset,
-                            'unresolved': (unresolved, unresolved2),
-                            'isMatrix': is_matrix == 1
+                            'unresolved': unresolved,
+                            'isMatrix': is_matrix == 1,
+                            'arrayLength': item_array_length,
+                            'rowCount': item_row_count
                         }
-                        assert item_row_count == 1 or is_matrix
                         struct_items.append(item_info)
 
             global_variables_count = struct.unpack('<i', buffer[pointer:pointer+4])[0]
             pointer += 4
             global_variable_info = []
-            block_info['globalVariableInfos'] = global_variable_info
+            block_info['globalVariableInfo'] = global_variable_info
             for i in range(global_variables_count):
                 str_length = struct.unpack('<i', buffer[pointer:pointer+4])[0]
                 pointer += 4
@@ -165,25 +174,24 @@ def blob_reader(buffers):
                 # variable_name = variable_name.decode('utf-8')
 
                 if is_constant_buffer == 0:
-                    un_property0, un_property1, un_property2 = struct.unpack('<iii', buffer[pointer:pointer+12])
+                    variable_index, un_property1, un_property2 = struct.unpack('<iii', buffer[pointer:pointer+12])
                     pointer += 12
                     global_variable_info.append({
-                        'index': un_property0,
-                        'suffix': '' if un_property1 == 0 else f'[{un_property1}]',
+                        'index': variable_index,
+                        'suffix': '',
                         'name': variable_name,
-                        'status': is_constant_buffer,
-                        'properties': (un_property0, un_property1, un_property2),
+                        'properties': (un_property1, un_property2),
                         'type': 'Texture2D<float4>' if un_property2 == 4 else 'float4'
                     })
                     assert un_property2 == 4
                 else:
-                    un_property0, un_property1 = struct.unpack('<ii', buffer[pointer:pointer+8])
+                    # un_property0, un_property1 = struct.unpack('<ii', buffer[pointer:pointer+8])
                     pointer += 8
-                    global_variable_info.append({
-                        'name': variable_name,
-                        'status': is_constant_buffer,
-                        'properties': (un_property0, un_property1)
-                    })
+                    # global_variable_info.append({
+                    #     'name': variable_name,
+                    #     'status': is_constant_buffer,
+                    #     'properties': (un_property0, un_property1)
+                    # })
 
 
 

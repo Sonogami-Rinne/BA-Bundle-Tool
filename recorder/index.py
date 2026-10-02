@@ -3,6 +3,7 @@ from recorder.ExternalsRecorder import ExternalsRecorder
 from recorder.HashInfoRecorder import HashInfoRecorder
 from recorder.TrackInfoRecorder import TrackInfoRecorder
 from recorder.TrackVisualizationRecorder import TrackVisualizationRecorder
+from recorder.ShaderRecorder import ShaderRecorder
 
 
 class Recorder:
@@ -16,6 +17,8 @@ class Recorder:
             self.container_objects.append(TrackInfoRecorder())
         if util.RECORDER_TRACK_VISUALIZATION:
             self.container_objects.append(TrackVisualizationRecorder())
+        if util.RECORDER_SHADER:
+            self.container_objects.append(ShaderRecorder())
 
     def notify_single(self, node):  # process
         for i in self.container_objects:

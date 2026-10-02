@@ -3,10 +3,10 @@ import pathlib
 import shutil
 from pyvis.network import Network
 
-from recorder.Recorder import Recorder
+from recorder.BaseRecorder import BaseRecorder
 
 
-class TrackVisualizationRecorder(Recorder):
+class TrackVisualizationRecorder(BaseRecorder):
     """
     使用Pyvis生成网络图.目前暂不支持hash的引用
     """

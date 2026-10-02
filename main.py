@@ -27,7 +27,7 @@ def single(data: tuple):
     node_dict[head.get_identification()] = head
     node_list = LinkedList[UnityResourceNode](head)
 
-    ignored_node = []
+    # ignored_node = []
 
     for turn in range(util.MAX_DEPTH):
         end_flag = True
@@ -38,13 +38,16 @@ def single(data: tuple):
                 iden = item[0] + str(item[1])
                 if (i_node := node_dict.get(iden)) is None:
                     if (node_info := info_json_manager.get_path_info(item[0], item[1])) is None:
-                        ignored_node.append(iden)
-                        CLogging.warn(f'Ignored node: {iden}')
+                        if not (util.IGNORE_UNITY_DEFAULT_RESOURCE and item[0].startswith('unity')):
+                            CLogging.warn(f'Ignored node: {iden}, attr_path: {attr_path}')
+                        # ignored_node.append(iden)
+                        # if attr_path != 'm_Avatar':
+                        #     CLogging.warn(f'Ignored node: {iden}, attr_path: {attr_path}')
                         continue
                     i_node = UnityResourceNode((item[0], item[1], node_info[0], node_info[1]), file_manager,
                                                info_json_manager)
                     if not i_node.init():
-                        ignored_node.append(iden)
+                        # ignored_node.append(iden)
                         CLogging.info(f'Ignored node: {iden}')
                         continue
                     node_dict[iden] = i_node
@@ -79,8 +82,6 @@ def run_files_in_prefabs(bundle):
     for cab_name, path_id, obj in util.env_load_prefabs(bundle):
         file_name = getattr(obj, 'm_Name')
         cur_file[0] = file_name
-        # if '0238' not in file_name:
-        #     continue
         util.CLogging.info(f'当前:{cur_file[0]}')
         single((cab_name, path_id, ClassIDType.GameObject, file_name))
 

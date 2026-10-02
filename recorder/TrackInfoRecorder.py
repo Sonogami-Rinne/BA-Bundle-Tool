@@ -2,10 +2,10 @@ import json
 import os
 import pathlib
 
-from recorder.Recorder import Recorder
+from recorder.BaseRecorder import BaseRecorder
 
 
-class TrackInfoRecorder(Recorder):
+class TrackInfoRecorder(BaseRecorder):
     """
     只记录PPtr型的引用，AnimationClip的hash型的引用不记录
     """

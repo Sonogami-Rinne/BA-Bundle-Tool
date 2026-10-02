@@ -6,18 +6,18 @@ reg_variable_declaration_operation = r'(\s*)((?:(?:float)|(?:int)|(?:uint))[1-4]
 reg_variable_declaration_extraction_findall = r'\s*([^,]+)\s*'
 reg_variable_name_declaration_extraction = r'(\w+)((?:\[\d+\])?)'
 reg_token = r'(\w+)(\W)'
-
-
-# reg_variable_name_operation_extraction = r'(\w+)((?:\[\d+\])?)(\.\w+)'
-# reg_expression_replacement = r'[()+\-*/><=^&%,!~:?]+'
-# reg_space_split = r'\s+'
-# reg_calculation_expression = r'(\s*)(.*?)(\s*=\s*)(.*?)(\s*;)'
+reg_space = r'\s*'
 
 
 def parse_shader_export(shader_export):
+    """
+    将由UnityPy导出的shader内容切割，以将类似GPUProgram ID 12345替换成具体的代码
+    :param shader_export:
+    :return:
+    """
     parts = []
     content = ''
-    GPUProgramIDPoi = []
+    GPU_program_ID_poi = []
     sub_shader_index = 0
     pass_index = 0
 
@@ -36,7 +36,7 @@ def parse_shader_export(shader_export):
         elif ls.startswith('GpuProgramID'):
             parts.append(content)
 
-            GPUProgramIDPoi.append((len(parts), sub_shader_index, pass_index))
+            GPU_program_ID_poi.append((len(parts), sub_shader_index, pass_index))
             parts.append(line)
             content = ''
         elif ls.startswith('}'):
@@ -54,10 +54,15 @@ def parse_shader_export(shader_export):
             content += line
             content += '\n'
     parts.append(content)
-    return parts, GPUProgramIDPoi
+    return parts, GPU_program_ID_poi
 
 
 def parse_hlsl_shader(hlsl_shader):
+    """
+    将由3dmigoto反编译得到的hlsl文件切割，以替换其中的变量名字为其对应的property名字
+    :param hlsl_shader:
+    :return:
+    """
     parts = []
     content = ''
     variable_map = {}
@@ -106,7 +111,7 @@ def parse_hlsl_shader(hlsl_shader):
             void_main_flag = False
 
         if function_body_flag and re.match(reg_variable_declaration_operation, line) is None:
-            ls = re.sub(r'\s*', '', ls)
+            ls = re.sub(reg_space, '', ls)
             middle_bracket_flag = False
             dot_flag = False
             while len(ls) > 0:
@@ -237,27 +242,17 @@ def parse_hlsl_shader(hlsl_shader):
     return parts, variable_map, global_variable_map, cbuffer_map
 
 
-# 忽略Hull, Domain
-# 说实话，代码重构Constant Buffer时极度依赖边界对齐这一未确定行为
+# 忽略Hull, Domain这两个stage
 def combine_info(data_dict, blob_shader_info, shader_export):
-    blob_shader_info = blob_shader_info['block_data']
+    blob_shader_info = blob_shader_info['blockData']
     sub_shaders = data_dict['m_ParsedForm']['m_SubShaders']
-    shader_keywords = data_dict['m_ParsedForm']['m_KeywordNames']
+    # shader_keywords = data_dict['m_ParsedForm']['m_KeywordNames']
     parsed_shader_exports, GPUPoi = parse_shader_export(shader_export)
     hlsl_map = {}
     processed_blob_blocks = set()
     props = set()
     for i in data_dict['m_ParsedForm']['m_PropInfo']['m_Props']:
         props.add(i['m_Name'])
-
-    def get_sub_range(appendix):
-        min_val = ord(appendix[1]) - 120
-        if min_val < 0:
-            min_val = 3
-        max_val = ord(appendix[-1]) - 120
-        if max_val < 0:
-            max_val = 3
-        return min_val, max_val
 
     for index, i in enumerate(blob_shader_info):
         if hlsl := i.get('hlsl_content'):
@@ -266,15 +261,15 @@ def combine_info(data_dict, blob_shader_info, shader_export):
     for line_index, sub_shader_index, pass_index in GPUPoi:
         pass_info = sub_shaders[sub_shader_index]['m_Passes'][pass_index]
         name_map = {i[1]: i[0] for i in pass_info['m_NameIndices']}
-        GPU_profram_call_cotent = ''
+        GPU_program_call_cotent = ''
 
-        for sub_pass_func_name in ['progVertex', 'progFragment', 'progGeometry']:
-            sub_pass_func_info = pass_info.get(sub_pass_func_name)
-            if len(sub_pass_func_info['m_PlayerSubPrograms']) > 0:
-                sub_pass_funcs = sub_pass_func_info['m_PlayerSubPrograms'][3]
-                common_parameters = sub_pass_func_info['m_CommonParameters']
-                constant_buffers = {i['m_NameIndex']: i for i in common_parameters['m_ConstantBuffers']}
-                parameter_blob_indices = sub_pass_func_info['m_ParameterBlobIndices'][3]
+        for shader_stage in ['progVertex', 'progFragment', 'progGeometry']:
+            shader_stage_info = pass_info.get(shader_stage)
+            if len(shader_stage_info['m_PlayerSubPrograms']) > 0:
+                stage_variants_funcs = shader_stage_info['m_PlayerSubPrograms'][3]
+                common_parameters = shader_stage_info['m_CommonParameters']
+                # constant_buffers = {i['m_NameIndex']: i for i in common_parameters['m_ConstantBuffers']}
+                parameter_blob_indices = shader_stage_info['m_ParameterBlobIndices'][3]
 
                 # 收集全局变量信息
                 global_variable_infos = []
@@ -304,113 +299,113 @@ def combine_info(data_dict, blob_shader_info, shader_export):
                 # 收集在Constant Buffer中的变量信息
                 constant_buffer_info_map = {}
                 for cbb in common_parameters['m_ConstantBufferBindings']:
-                    # cb_info = constant_buffers[cbb['m_NameIndex']]
-                    if not (cb_info := constant_buffers.get(cbb['m_NameIndex'])):
-                        constant_buffer_info_map[cbb['m_Index']] = {
-                            'name': name_map[cbb['m_NameIndex']],
-                            'index': cbb['m_Index'],
-                            'bufferSize': -1,
-                            'parameters': []
-                        }
-                        continue
-                    info = {
+                    constant_buffer_info_map[cbb['m_Index']] = {
                         'name': name_map[cbb['m_NameIndex']],
                         'index': cbb['m_Index'],
-                        'bufferSize': cb_info['m_Size']
+                        'parameters': []
                     }
-                    constant_buffer_info_map[cbb['m_Index']] = info
-
-                    cb_variables_infos = []
+                index_less_constant_buffers = {}
+                for cb_index, cb_info in enumerate(common_parameters['m_ConstantBuffers']):
+                    if not(tar := constant_buffer_info_map.get(cb_index)):
+                        tar = {
+                            'name': None,
+                            'index': cb_index,
+                            'parameters': []
+                        }
+                        index_less_constant_buffers[name_map[cb_info['m_NameIndex']]] = tar
+                    parameters = tar['parameters']
                     for item in cb_info['m_VectorParams']:
-                        para_offset = item['m_Index'] // 4
-                        para_array_size = item['m_ArraySize'] if item['m_ArraySize'] > 0 else 1
-                        para_array_in_buffer_index = para_offset // 4
-                        para_array_in_buffer_sub_offset = para_offset % 4
-                        para_size = para_array_size * item['m_Dim']
-                        para_array_in_buffer_index_end = (para_size + para_offset - 1) // 4
-                        para_array_in_buffer_end_sub_offset = (para_size + para_offset - 1) % 4
-                        assert (not (item['m_Dim'] == 4 and para_array_in_buffer_sub_offset != 0))
+                        para_offset = item['m_Index'] >> 2
+                        para_array_length = item['m_ArraySize']
+                        para_array_in_buffer_index = para_offset >> 2
+                        para_array_in_buffer_sub_offset = para_offset & 0x3
+                        para_size = max(para_array_length, 1) * item['m_Dim']
+                        para_end_poi = para_size + para_offset - 1
+                        para_array_in_buffer_index_end = para_end_poi >> 2
+                        para_array_in_buffer_end_sub_offset = para_end_poi & 0x3
 
-                        cb_variables_infos.append({
+                        parameters.append({
                             'arrayIndex': para_array_in_buffer_index,
                             'arrayIndexOffset': para_array_in_buffer_sub_offset,
-                            'arrayIndexValue': para_array_in_buffer_index << 2 | para_array_in_buffer_sub_offset,
+                            'arrayIndexValue': para_offset,
                             'arrayEndIndex': para_array_in_buffer_index_end,
                             'arrayEndIndexOffset': para_array_in_buffer_end_sub_offset,
-                            'arrayEndIndexValue': para_array_in_buffer_index_end << 2 | para_array_in_buffer_end_sub_offset,
-                            'arraySize': para_array_size,
-                            'elementSize': item['m_Dim'] * 4,
+                            'arrayEndIndexValue': para_end_poi,
+                            'arrayLength': para_array_length,
                             'name': name_map[item['m_NameIndex']],
                             'type': f'float{item["m_Dim"]}',
                             'dim': item['m_Dim'],
                             'isMatrix': False,
-                            'offset': item['m_Index']
+                            'rowCount': 1
                         })
                     for item in cb_info['m_MatrixParams']:
-                        para_offset = item['m_Index'] // 4  # 字偏移
-                        para_array_size = item['m_ArraySize'] if item['m_ArraySize'] > 0 else 1
-                        para_array_in_buffer_index = para_offset // 4
-                        para_array_in_buffer_sub_offset = para_offset % 4
-                        para_size = para_array_size * item['m_RowCount'] * 4  # * dim = 4, 字为单位
-                        para_array_in_buffer_index_end = (para_size + para_offset - 1) // 4
-                        para_array_in_buffer_end_sub_offset = (para_size + para_offset - 1) % 4
+                        para_offset = item['m_Index'] >> 2  # 字偏移
+                        para_array_length = item['m_ArraySize']
+                        para_array_in_buffer_index = para_offset >> 2
+                        para_array_in_buffer_sub_offset = para_offset & 0x3
+                        para_size = max(para_array_length, 1) * item['m_RowCount'] * 4  # * dim = 4, 字为单位
+                        para_end_poi = para_size + para_offset - 1
+                        para_array_in_buffer_index_end = para_end_poi >> 2
+                        para_array_in_buffer_end_sub_offset = para_end_poi & 0x3
 
-                        cb_variables_infos.append({
+                        parameters.append({
                             'arrayIndex': para_array_in_buffer_index,
                             'arrayIndexOffset': para_array_in_buffer_sub_offset,
-                            'arrayIndexValue': para_array_in_buffer_index << 2 | para_array_in_buffer_sub_offset,
+                            'arrayIndexValue': para_offset,
                             'arrayEndIndex': para_array_in_buffer_index_end,
                             'arrayEndIndexOffset': para_array_in_buffer_end_sub_offset,
-                            'arrayEndIndexValue': para_array_in_buffer_index_end << 2 | para_array_in_buffer_end_sub_offset,
-                            'arraySize': para_array_size,
-                            'elementSize': 16 * item['m_RowCount'],
+                            'arrayEndIndexValue': para_end_poi,
+                            'arrayLength': para_array_length,
                             'name': name_map[item['m_NameIndex']],
                             'type': f'Matrix{item["m_RowCount"]}x4',
                             'dim': 4,
                             'rowCount': item['m_RowCount'],
                             'isMatrix': True,
-                            'offset': item['m_Index']
                         })
                     for item in cb_info['m_StructParams']:
+                        #  暂时不想写这部分，遇到了再说
                         struct_name = name_map[item['m_NameIndex']]
                         assert False
 
-                    info['parameters'] = cb_variables_infos
-
                 # 替换变量名字
-                for func_index, sub_pass_func in enumerate(sub_pass_funcs):
-                    if sub_pass_func['m_BlobIndex'] not in processed_blob_blocks:
-                        processed_blob_blocks.add(sub_pass_func['m_BlobIndex'])
+                for variant_index, variant_func in enumerate(stage_variants_funcs):
+                    if variant_func['m_BlobIndex'] not in processed_blob_blocks:
+                        processed_blob_blocks.add(variant_func['m_BlobIndex'])
                     else:
                         continue
-                    hlsl_parts, hlsl_variable_map, hlsl_global_variable_map, hlsl_cbuffer_map, _ = hlsl_map[
-                        sub_pass_func['m_BlobIndex']]
+                    hlsl_parts, hlsl_variable_map, hlsl_global_variable_map, hlsl_cbuffer_map, _ = hlsl_map[variant_func['m_BlobIndex']]
 
-                    blob_index = parameter_blob_indices[func_index]
+                    blob_index = parameter_blob_indices[variant_index]
                     blob_parameter_infos = blob_shader_info[blob_index]['constantBufferInfo']
-                    blob_global_variable_infos = blob_shader_info[blob_index]['globalVariableInfos']
+                    blob_global_variable_infos = blob_shader_info[blob_index]['globalVariableInfo']
 
                     merged_constant_buffer_info = {}
                     for item in constant_buffer_info_map.values():
                         merged_constant_buffer_info[item['index']] = {
                             'name': item['name'],
-                            'parameters': [i for i in item['parameters']],
-                            'bufferSize': item['bufferSize']
+                            'parameters': [i for i in item['parameters']]
                         }
 
                     for index, item in enumerate(blob_parameter_infos):
                         if _tar := merged_constant_buffer_info.get(index):
                             _tar['parameters'].extend(item['parameters'])
                             _tar['structs'] = item['structs']
+                            # _tar['name'] = item['name']
                             # assert _tar['name'] == item['name']
 
-                            _tar['bufferSize'] = max(item['bufferSize'], _tar['bufferSize'])
+                        elif _tar := index_less_constant_buffers.get(item['name']):
+                            parameters = [i for i in _tar['parameters']]
+                            parameters.extend(item['parameters'])
+                            merged_constant_buffer_info[index] = {
+                                'name': item['name'],
+                                'parameters': parameters,
+                                'structs': item['structs']
+                            }
                         else:
                             merged_constant_buffer_info[index] = {
                                 'name': item['name'],
                                 'parameters': item['parameters'],
                                 'structs': item['structs'],
-                                'bufferSize': item['bufferSize']
                             }
 
                     # 替换Constant Buffer名字
@@ -419,43 +414,13 @@ def combine_info(data_dict, blob_shader_info, shader_export):
                         ori_name = v['name']
                         hlsl_parts[hlsl_cbuffer_map[var_name]['line']] = ori_name
 
+                    # 替换constant buffer中各个变量的名字
                     for k, v in merged_constant_buffer_info.items():
                         arr = [i for i in v['parameters']]
+                        arr.sort(key=lambda x: x['arrayIndexValue'])
                         structs = v['structs']
                         tar_name = f'cb{k}'
                         if tar_name in hlsl_variable_map:
-                            arrrr = [i for i in arr]
-                            for st in structs:
-                                arrrr.extend(st['parameters'])
-
-                            #  补全Blob中各个变量的arrayIndexEnd信息
-                            arrrr.sort(key=lambda x: x['offset'])
-                            arrrr.append({
-                                'offset': v['bufferSize']
-                            })
-                            for item_index in range(len(arrrr) - 1):
-                                cur = arrrr[item_index]
-                                if cur.get('arrayEndIndex'):
-                                    continue
-                                #  如果这个属性是自定义的(在props)中，那么可以肯定它们数组长度为1.
-                                #  如果是unity内置的，没办法得知，只能尽可能取
-                                if cur['name'] in props:
-                                    item_end_poi = cur['offset'] + cur['elementSize'] - 1
-                                    item_array_size = 1
-                                    item_end_word_poi = item_end_poi // 4
-                                    item_array_in_buffer_end_index = item_end_word_poi // 4
-                                    item_array_in_buffer_end_index_sub_offset = item_end_word_poi % 4
-                                else:
-                                    item_array_size = (arrrr[item_index + 1]['offset'] - cur['offset']) // cur['elementSize']
-                                    item_end_poi = cur['offset'] + cur['elementSize'] * item_array_size - 1  # 最后一个byte位置
-                                    item_end_word_poi = item_end_poi // 4  # 最后一个字的位置
-                                    item_array_in_buffer_end_index = item_end_word_poi // 4
-                                    item_array_in_buffer_end_index_sub_offset = item_end_word_poi % 4
-                                cur['arrayEndIndex'] = item_array_in_buffer_end_index
-                                cur['arrayEndIndexOffset'] = item_array_in_buffer_end_index_sub_offset
-                                cur['arrayEndIndexValue'] = item_array_in_buffer_end_index << 2 | item_array_in_buffer_end_index_sub_offset
-                                cur['arraySize'] = item_array_size
-                            del arrrr
 
                             pois = hlsl_variable_map[f'cb{k}']['poi']
                             # 先替换CBuffer中的申明
@@ -469,17 +434,18 @@ def combine_info(data_dict, blob_shader_info, shader_export):
                             converted_lines = ''
                             for ar in arr:
                                 line = indent + ar['type'] + ' ' + ar['name']
-                                array_size = ar['arraySize']
-                                if array_size > 1:
-                                    line += f'[{array_size}]'
+                                array_length = ar['arrayLength']
+                                if array_length > 0:
+                                    line += f'[{array_length}]'
                                 line += f'    //({ar["arrayIndex"]},{ar["arrayIndexOffset"]})-({ar["arrayEndIndex"]},{ar["arrayEndIndexOffset"]});\n'
                                 converted_lines += line
                             for st in structs:
-                                line = indent + f'struct {st["name"]}\n' + indent + '{\n'
+                                line = indent + f'struct {st["name"]}{"" if st["arrayLength"] == 0 else "[" + str(st["arrayLength"]) + "]"}\n' + indent + '{\n'
                                 for item in st['parameters']:
                                     line += (f'{indent}{item["type"]} {item["name"]}' + (
-                                        '' if item['arraySize'] == 1 else f'[{item["arraySize"]}]') + f'    //({item["arrayIndex"]},{item["arrayIndexOffset"]})-({item["arrayEndIndex"]},{item["arrayEndIndexOffset"]});\n')
+                                        '' if item['arrayLength'] == 0 else f'[{item["arrayLength"]}]') + f'    //({item["arrayIndex"]},{item["arrayIndexOffset"]})-({item["arrayEndIndex"]},{item["arrayEndIndexOffset"]});\n')
                                 line += '}\n'
+                                arr.extend(st['parameters'])
                                 converted_lines += line
                             hlsl_parts[pois[0]] = converted_lines
 
@@ -487,49 +453,66 @@ def combine_info(data_dict, blob_shader_info, shader_export):
                                 if len(hlsl_parts[poi + 1]) <= 2:
                                     hlsl_parts[poi] = v['name']
                                     continue
-                                variable_array_index = int(hlsl_parts[poi + 1][1:-1])
-                                variable_min_offset, _ = get_sub_range(hlsl_parts[poi + 2])
+
+                                items = []
                                 ori_appendix = hlsl_parts[poi + 2][1:]
-                                variable_index_value = variable_array_index << 2 | variable_min_offset
-                                for ar in arr:
-                                    if ar['arrayIndexValue'] <= variable_index_value <= ar['arrayEndIndexValue']:
-                                        hlsl_parts[poi] = ar['name']
-                                        suffix = ''
-                                        parameter_dim = ar['dim']
-                                        parameter_element_word_size = ar['elementSize'] // 4  # 单元素所占的字长
-                                        array_index_distance = variable_index_value - ar['arrayIndexValue']
-                                        # To Do 关于Matrix以及Matrix矩阵
-                                        converted_array_index = array_index_distance // parameter_element_word_size
-                                        converted_array_sub_offset = array_index_distance % ar['dim']
+                                variable_array_index = int(hlsl_parts[poi + 1][1:-1])
+                                certain_variable_index = None
+                                variable_index_value = variable_array_index << 2
+                                for char in ori_appendix:
+                                    offset_val = ord(char) - 120
+                                    if offset_val < 0:
+                                        offset_val = 3
+                                    offset_val |= variable_index_value
 
-                                        if ar['isMatrix']:
-                                            converted_array_index = array_index_distance // 4
-                                        if ar['arraySize'] > 1 or ar['isMatrix']:
-                                            suffix = f'[{converted_array_index}]'
-                                        hlsl_parts[poi + 1] = suffix
-                                        if parameter_dim > 1:
-                                            converted_appendix = '.'
-                                            first_char_ord = ord(ori_appendix[0])
-                                            # variable_index是由后缀的第一个字符计算得来的，因此 converted_array_sub_offset
-                                            # 也是第一个字符在variable数组空间中的偏移。举个例子，全局buffer是0.x,0.y,0.z,0.w,1.x...
-                                            # 这么排列的，假设这个variable的维度是3，起始是1,那么v0.x对应全局buffer中的0.y,以此类推
-                                            # v0.y,v0.z,v1.x...,我们需要计算在全局buffer中后缀各个字符与后缀第一个字符的偏移，再加上
-                                            # 第一个字符在variable空间中的偏移，就是对应位置字符在variable中的偏移
-                                            for char in ori_appendix:
-                                                chr_distance = ord(char) - first_char_ord + converted_array_sub_offset
-                                                if chr_distance < 0:
-                                                    chr_distance += 4
-                                                chr_distance %= parameter_dim
-                                                if chr_distance == 3:
-                                                    chr_distance = -1
-                                                converted_appendix += chr(120 + chr_distance)
-                                            hlsl_parts[poi + 2] = converted_appendix
+                                    if certain_variable_index is None or ((ar := arr[certain_variable_index]) and (ar['arrayIndexValue'] > offset_val or offset_val > ar['arrayEndIndexValue'])):
+                                        #  二分吗？我不想写了
+                                        for _index, ar in enumerate(arr):
+                                            if ar['arrayIndexValue'] <= offset_val <= ar['arrayEndIndexValue']:
+                                                certain_variable_index = _index
+                                                break
+
+                                    ar = arr[certain_variable_index]
+                                    _item_name = ar['name']
+                                    _item_suffix = ''
+                                    parameter_dim = ar['dim']
+                                    array_index_distance = offset_val - ar['arrayIndexValue']
+                                    converted_array_index = array_index_distance // parameter_dim
+                                    if ar['isMatrix'] or ar['arrayLength'] > 0:
+                                        if ar['arrayLength'] > 0 and ar['isMatrix']:
+                                            _item_suffix = f'[{converted_array_index // ar["rowCount"]}][{converted_array_index % ar["rowCount"]}]'
                                         else:
-                                            hlsl_parts[poi + 2] = ''
-                                        break
+                                            _item_suffix = f'[{converted_array_index}]'
+                                    if parameter_dim > 1:
+                                        chr_distance = (offset_val - ar['arrayIndexOffset'] + 4) % parameter_dim
+                                        if chr_distance == 3:
+                                            chr_distance = -1
+                                        _item_appendix = chr(120 + chr_distance)
+                                    else:
+                                        _item_appendix = ''
+                                    if len(items) > 0 and items[-1][0] == _item_name and items[-1][
+                                        1] == _item_suffix and parameter_dim > 1:
+                                        items[-1][2] = items[-1][2] + _item_appendix
+                                    else:
+                                        items.append([_item_name, _item_suffix, _item_appendix])
+                                # items = [i[0] + i[1] + i[2] for i in items]
 
-                    merged_global_variable_map = global_variable_infos + [i for i in blob_global_variable_infos if
-                                                                          i['status'] == 0]
+                                first_item = items[0]
+                                if first_item[2] == '':
+                                    flag = True
+                                    for item in items:
+                                        if item[0] != first_item[0]:
+                                            flag = False
+                                            break
+                                    if flag:
+                                        items = items[:1]
+                                items = [f'{i[0]}{i[1]}{"" if i[2] == "" else ("." + i[2])}' for i in items]
+                                hlsl_parts[poi] = ' , '.join(items)
+
+                                hlsl_parts[poi + 1] = ''
+                                hlsl_parts[poi + 2] = ''
+
+                    merged_global_variable_map = global_variable_infos + blob_global_variable_infos
                     merged_global_variable_map.sort(key=lambda x: x['index'])
 
                     # 替换全局变量名字
@@ -542,16 +525,16 @@ def combine_info(data_dict, blob_shader_info, shader_export):
                                     hlsl_parts[poi] = name
                                 break
                 # 构建
-                sub_shader_func_content = '{\n' + sub_pass_func_name + '\n\n'
+                sub_shader_func_content = '{\n@SHADER_STAGE: ' + shader_stage + '\n\n'
 
-                for func_index, sub_pass_func in enumerate(sub_pass_funcs):
-                    hlsl_parts, _, _, _, sub_pass_keywords = hlsl_map[sub_pass_func['m_BlobIndex']]
-                    sub_shader_func_content += ('{\n    ' + ','.join(sub_pass_keywords) + '\n\n')
-                    sub_shader_func_content += (''.join(hlsl_parts) + '\n\n}')
+                for variant_index, variant_func in enumerate(stage_variants_funcs):
+                    hlsl_parts, _, _, _, sub_pass_keywords = hlsl_map[variant_func['m_BlobIndex']]
+                    sub_shader_func_content += ('{\n    @SHADER_KEYWORDS: ' + ','.join(sub_pass_keywords) + '\n\n')
+                    sub_shader_func_content += (''.join(hlsl_parts) + '\n}\n')
 
-                sub_shader_func_content += '}'
-                GPU_profram_call_cotent += sub_shader_func_content
+                sub_shader_func_content += '}\n'
+                GPU_program_call_cotent += sub_shader_func_content
 
-        parsed_shader_exports[line_index] = GPU_profram_call_cotent
+        parsed_shader_exports[line_index] = GPU_program_call_cotent
 
     return ''.join(parsed_shader_exports)

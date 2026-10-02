@@ -3,7 +3,7 @@ import os
 import pathlib
 
 
-class Recorder:
+class BaseRecorder:
     def __init__(self):
         self.batch_data = {}
         self.batch_size: int = 1  # 这个size是保存一批数据前notify的次数，因此并不保证每次保存的文件大小接近

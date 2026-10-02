@@ -42,10 +42,14 @@ MAX_DEPTH = 100
 
 CONTAINER_RECORD = True
 
-RECORDER_EXTERNAL = True
+RECORDER_EXTERNAL = False
 RECORDER_HASH_INFO = False
 RECORDER_TRACK_INFO = False
 RECORDER_TRACK_VISUALIZATION = False
+RECORDER_SHADER = False
+
+EXPORT_HLSL_SHADER = False
+IGNORE_UNITY_DEFAULT_RESOURCE = True
 
 PREFABS_MODE = True
 
@@ -219,7 +223,13 @@ def get_transform(base_node):
     return transform_matrix
 
 def better_print(content, indent_num=4):
-    after = ''
+    """
+    简易优质打印
+    :param content:
+    :param indent_num:
+    :return:
+    """
+    parts = []
     consistent_blank_line_count = 0
     base_indent = ' ' * indent_num
     cur_indent = ''
@@ -227,35 +237,41 @@ def better_print(content, indent_num=4):
     def process(sub_line):
         ls = sub_line.strip()
         nonlocal consistent_blank_line_count
-        nonlocal after
         nonlocal cur_indent
         if len(ls) == 0:
             consistent_blank_line_count += 1
             if consistent_blank_line_count > 2:
                 return
-            after += '\n'
+            # after += '\n'
+            parts.append('')
             return
         else:
             consistent_blank_line_count = 0
-        if ls.startswith('{'):
-            after += cur_indent + '{\n'
+        if (chr_index := ls.find('{')) >= 0:
+            if chr_index > 0:
+                process(ls[:chr_index])
+            # after += cur_indent + '{\n'
+            parts.append(f'{cur_indent}{"{"}')
             cur_indent += base_indent
-            ls = ls[1:].strip()
-            if len(ls) > 0:
-                process(ls)
-        elif ls.startswith('}'):
-            cur_indent = cur_indent[:-indent_num]
-            after += cur_indent + '}\n'
-            ls = ls[1:].strip()
-            if len(ls) > 0:
-                process(ls)
+            if chr_index < len(ls) - 1:
+                process(ls[chr_index + 1:])
+        elif (chr_index := ls.find('}')) >= 0:
+            if chr_index > 0:
+                # after += cur_indent + ls[:chr_index] + '\n'
+                parts.append(f'{cur_indent}{ls[:chr_index]}')
+            cur_indent = cur_indent[:-4]
+            # after += cur_indent + '}\n'
+            parts.append(f'{cur_indent}{"}"}')
+            if chr_index < len(ls) - 1:
+                process(ls[chr_index + 1:])
         else:
-            after += cur_indent + ls + '\n'
+            # after += cur_indent + ls + '\n'
+            parts.append(f'{cur_indent}{ls}')
 
     for line in content.split('\n'):
         process(line)
 
-    return after
+    return '\n'.join(parts)
 
 
 class CLogging:
