@@ -48,5 +48,5 @@ class FileManager:
         self.buffer[bundle_name] = env_objects
         if len(self.buffer) > self.max_length:
             first = next(iter(self.buffer))
-            del first
+            del self.buffer[first]
         return env_objects

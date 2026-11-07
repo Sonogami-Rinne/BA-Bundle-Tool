@@ -63,7 +63,6 @@ class UnityResourceNode:
                 ]
             self.info_json_manager.add_dependencies(self.cab, dependencies)
         self.dependencies = dependencies
-
         return True
 
     def get_node(self):

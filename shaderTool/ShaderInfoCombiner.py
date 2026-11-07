@@ -1,5 +1,7 @@
 import re
 
+import util
+
 reg_constant_buffer_declaration_operation = r'(\s*cbuffer\s*)(.*?)(\s*:.*)'
 reg_global_variable_declaration_operation = r'(\s*)(\S*)(\s*)([^[]*)((?:\[\d+\])?)( : register[^0-9]*)([0-9]+)(.*)'
 reg_variable_declaration_operation = r'(\s*)((?:(?:float)|(?:int)|(?:uint))[1-4]?)(\s*)(.*)(\s*;)'
@@ -471,7 +473,9 @@ def combine_info(data_dict, blob_shader_info, shader_export):
                                             if ar['arrayIndexValue'] <= offset_val <= ar['arrayEndIndexValue']:
                                                 certain_variable_index = _index
                                                 break
-
+                                    if certain_variable_index is None:
+                                        util.CLogging.warn('Failed to get original shader variable name')
+                                        continue
                                     ar = arr[certain_variable_index]
                                     _item_name = ar['name']
                                     _item_suffix = ''
@@ -497,6 +501,9 @@ def combine_info(data_dict, blob_shader_info, shader_export):
                                         items.append([_item_name, _item_suffix, _item_appendix])
                                 # items = [i[0] + i[1] + i[2] for i in items]
 
+                                if len(items) == 0:
+                                    util.CLogging.warn('Some issues in shader converting.')
+                                    continue
                                 first_item = items[0]
                                 if first_item[2] == '':
                                     flag = True

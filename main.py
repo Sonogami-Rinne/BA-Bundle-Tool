@@ -77,12 +77,16 @@ def run_files_in_single_bundle(bundle):
             recorder.notify_bulk(cur_file[0])
             node_dict.clear()
 
-
 def run_files_in_prefabs(bundle):
     for cab_name, path_id, obj in util.env_load_prefabs(bundle):
         file_name = getattr(obj, 'm_Name')
         cur_file[0] = file_name
+        prefab_save_path = os.path.join('save', 'container', file_name)
+        if os.path.isdir(prefab_save_path):
+            util.CLogging.info(f'跳过已存在的Prefab:{file_name}')
+            continue
         util.CLogging.info(f'当前:{cur_file[0]}')
+        container.set_prefab_name(file_name)
         single((cab_name, path_id, ClassIDType.GameObject, file_name))
 
         container.notify_bulk(cur_file[0])
@@ -94,7 +98,6 @@ def run_bundles(bundle_filter, bulk_fnc):
     for file in os.listdir(util.BUNDLES_PATH):
         if bundle_filter is None or bundle_filter(file):
             CLogging.info(f'处理{file}')
-
             bundle = file.removesuffix('.bundle')
             bulk_fnc(bundle)
 

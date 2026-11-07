@@ -1,8 +1,11 @@
 import os
 import pathlib
 
+import numpy as np
+
 import util
 from containerObjects.ContainerObject import ContainerObject
+from containerObjects.SpineClips import SpineClips
 from typeId import ClassIDType
 from shapeId import ShapeId
 
@@ -127,7 +130,7 @@ class Particle(ContainerObject):
             iden = (node.dependencies[target.m_FileID - 1] if target.m_FileID > 0 else node.cab) + str(path_id)
             if target := nodes_dict.get(iden):
                 data['mesh'] = target.name
-                self.meshes.append(target)
+                self.meshes[target.name] = target.obj
 
         target = obj.m_MeshRenderer
         if target.m_PathID != 0:
@@ -184,7 +187,7 @@ class Particle(ContainerObject):
 
     def __process_sprite__(self, obj, nodes_dict, node):
         target = obj.m_Sprite
-        sprite_container = self.parent_container.container_objects['SpriteRender']
+        sprite_container = self.parent.container_objects['SpriteRender']
         data = {}
 
         if (path_id := target.m_PathID) != 0:
@@ -223,9 +226,9 @@ class Particle(ContainerObject):
             'alphaKeys': obj.m_NumAlphaKeys,
             'colorKeys': obj.m_NumColorKeys
         }
-        for i in range(0, 7):
-            data['atime'].append(round(getattr(obj, f'atime{i}') / 32767, 3))
-            data['ctime'].append(round(getattr(obj, f'ctime{i}'), 3))
+        for i in range(0, 8):
+            data['atime'].append(round(getattr(obj, f'atime{i}') / 65535, 6))
+            data['ctime'].append(round(getattr(obj, f'ctime{i}') / 65535, 6))
             data['key'].append(util.to_tuple(getattr(obj, f'key{i}')))
         return data
 
@@ -341,17 +344,17 @@ class Particle(ContainerObject):
         vec4(int[8] atime, int[8] ctime, vec4[8] key)
         '''
 
-    def __init__(self, parent_container):
-        super().__init__(parent_container)
+    def __init__(self, parent):
+        super().__init__(parent)
         self.textures = []
-        self.meshes = []
+        self.meshes = {}
         self.hlsls = {}
         self.glsls = {}
 
     def process_particle_system(self, node):
         obj = node.obj
         data = {}
-        nodes_dict = self.parent_container.nodes_dict
+        nodes_dict = self.parent.nodes_dict
         #  忽略的模块
         for module_name in ('CollisionModule', 'ExternalForcesModule', 'InheritVelocityModule', 'LightsModule','TriggerModule'):
             sub_module = getattr(obj, module_name)
@@ -414,6 +417,7 @@ class Particle(ContainerObject):
         sub_module = obj.ForceModule
         if sub_module.enabled:
             data['forceModule'] = {
+                'space': 0 if sub_module.inWorldSpace else 1,
                 'x': Particle.process_min_max_curve(sub_module.x),
                 'y': Particle.process_min_max_curve(sub_module.y),
                 'randomizePerFrame': sub_module.randomizePerFrame
@@ -427,24 +431,26 @@ class Particle(ContainerObject):
             'maxNum': sub_module.maxNumParticles,
             'startColor': Particle.process_min_max_gradient(sub_module.startColor),
             'startLifeTime': Particle.process_min_max_curve(sub_module.startLifetime),
-            # 'rotation3D': sub_module.rotation3D,
-            # 'startRotationX': Particle.process_min_max_curve(sub_module.startRotationX),
-            # 'startRotationY': Particle.process_min_max_curve(sub_module.startRotationY),
+            'rotation3D': sub_module.rotation3D,
+            'startRotationX': Particle.process_min_max_curve(sub_module.startRotationX),
+            'startRotationY': Particle.process_min_max_curve(sub_module.startRotationY),
             'startRotation': Particle.process_min_max_curve(sub_module.startRotation),
             'size3D': sub_module.size3D,
             'startSizeY': Particle.process_min_max_curve(sub_module.startSizeY),
-            # 'startSizeZ': Particle.process_min_max_curve(sub_module.startSizeZ),
+            'startSizeZ': Particle.process_min_max_curve(sub_module.startSizeZ),
             'startSize': Particle.process_min_max_curve(sub_module.startSize),
-            'startSpeed': Particle.process_min_max_curve(sub_module.startSize),
+            'startSpeed': Particle.process_min_max_curve(sub_module.startSpeed),
             'duration': obj.lengthInSec,  # 粒子系统的时长。不知道为什么，这个东西放在粒子系统的根部分，而不是模块内
             'loop': obj.looping,
             'playOnAwake': obj.playOnAwake,  # 在创建对象后自动启动.hmm
-            # 'randomSeed': obj.randomSeed,
-            # 'autoRandomSeed': obj.autoRandomSeed,
+            'randomSeed': obj.randomSeed,
+            'autoRandomSeed': obj.autoRandomSeed,
             'prewarm': obj.prewarm,
+            'simulationSpace': int(obj.moveWithTransform),  # 0=World, 1=Local, 2=Custom
             'scalingMode': obj.scalingMode,  # hierarchy, local(忽略父级的Transform的scale), shape(仅改变发射区域，不改变粒子大小)
             'simulationSpeed': obj.simulationSpeed,  # 更新速度
-            'delay': Particle.process_min_max_curve(obj.startDelay)  # 从创建到第一次发射的时间
+            'delay': Particle.process_min_max_curve(obj.startDelay),  # 从创建到第一次发射的时间
+            'emitterVelocityMode': obj.emitterVelocityMode
         }
 
         #  生命随速度变换模块
@@ -468,14 +474,14 @@ class Particle(ContainerObject):
                 'quality': sub_module.quality if sub_module.quality < 2 else 1,  # 质量
                 'remapEnabled': sub_module.remapEnabled,  # 是否将数值重映射
                 'remapY': Particle.process_min_max_curve(sub_module.remapY),
-                # 'remapZ': Particle.process_min_max_curve(sub_module.remapZ),
+                'remapZ': Particle.process_min_max_curve(sub_module.remapZ),
                 'remap': Particle.process_min_max_curve(sub_module.remap),
                 'rotationAmount': sub_module.rotationAmount,  # 类似,
                 'scrollSpeed': Particle.process_min_max_curve(sub_module.scrollSpeed),  # 随着时间的推移而移动噪声场可产生更不可预测和不稳定的粒子移动
                 'separateAxis': sub_module.separateAxes,  # 在每个轴上独立控制强度和重新映射
                 'sizeAmount': Particle.process_min_max_curve(sub_module.sizeAmount),  # 类似
                 'strengthY': Particle.process_min_max_curve(sub_module.strengthY),
-                # 'strengthZ': Particle.process_min_max_curve(sub_module.strengthZ),
+                'strengthZ': Particle.process_min_max_curve(sub_module.strengthZ),
                 'strength': Particle.process_min_max_curve(sub_module.strength),
                 # 噪声在粒子的生命周期内对粒子的影响有多强,猜测这个为基本影响参数，再分别乘上那三个
             }
@@ -486,9 +492,9 @@ class Particle(ContainerObject):
             data['rotationBySpeedModule'] = {
                 'curve': Particle.process_min_max_curve(sub_module.curve),
                 'range': util.to_tuple(sub_module.range),
-                # 'separateAxis': sub_module.separateAxes,
-                # 'curveX': Particle.process_min_max_curve(sub_module.x),
-                # 'curveY': Particle.process_min_max_curve(sub_module.y),
+                'separateAxis': sub_module.separateAxes,
+                'curveX': Particle.process_min_max_curve(sub_module.x),
+                'curveY': Particle.process_min_max_curve(sub_module.y),
             }
 
         #  旋转模块,以度为单位
@@ -496,9 +502,9 @@ class Particle(ContainerObject):
         if sub_module.enabled:
             data['rotationModule'] = {
                 'curve': Particle.process_min_max_curve(sub_module.curve),
-                # 'separateAxes': sub_module.separateAxes,
-                # 'curveX': Particle.process_min_max_curve(sub_module.x),
-                # 'curvey': Particle.process_min_max_curve(sub_module.y),
+                'separateAxes': sub_module.separateAxes,
+                'curveX': Particle.process_min_max_curve(sub_module.x),
+                'curvey': Particle.process_min_max_curve(sub_module.y),
             }
 
         #  形状模块（粒子生成区域）
@@ -507,15 +513,13 @@ class Particle(ContainerObject):
         data['shapeModule'] = {
             'enabled': sub_module.enabled,
             'shape': shape,
-            #  这些是忽略的部分
-
             # 'texture': sub_module.m_Texture,
-            # 'clipChannel': sub_module.m_TextureClipChannel,
-            # 'clipThreshold': sub_module.m_TextureClipThreshold,
-            # 'colorAffectsParticles': sub_module.m_TextureColorAffectsParticles,
-            # 'alphaAffectsParticles': sub_module.m_TextureAlphaAffectsParticles,
+            'clipChannel': sub_module.m_TextureClipChannel,
+            'clipThreshold': sub_module.m_TextureClipThreshold,
+            'colorAffectsParticles': sub_module.m_TextureColorAffectsParticles,
+            'alphaAffectsParticles': sub_module.m_TextureAlphaAffectsParticles,
             # 'bilinearFiltering': sub_module.BilinearFiltering,
-            # 'alignToDirection': sub_module.alignToDirection,
+            'alignToDirection': sub_module.alignToDirection,
             'position': util.to_tuple(sub_module.m_Position),
             'rotation': util.to_tuple(sub_module.m_Rotation),
             'scale': util.to_tuple(sub_module.m_Scale),
@@ -533,10 +537,10 @@ class Particle(ContainerObject):
             data['sizeBySpeedModule'] = {
                 'curve': Particle.process_min_max_curve(
                     sub_module.curve) if not sub_module.separateAxes else Particle.process_min_max_curve(sub_module.x),
-                'range': util.to_tuple(sub_module.range),
+                'range': (sub_module.range.x, sub_module.range.y),
                 'separateAxis': sub_module.separateAxes,
                 'curveY': Particle.process_min_max_curve(sub_module.y),
-                # 'curveZ': Particle.process_min_max_curve(sub_module.z),
+                'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
         #  缩放模块
@@ -546,22 +550,23 @@ class Particle(ContainerObject):
                 'curve': Particle.process_min_max_curve(sub_module.curve),
                 'separateAxis': sub_module.separateAxes,
                 'curveY': Particle.process_min_max_curve(sub_module.y),
-                # 'curveZ': Particle.process_min_max_curve(sub_module.z),
+                'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
         #  速度模块
         sub_module = obj.VelocityModule
         if sub_module.enabled:
             data['velocityModule'] = {
+                'space': 0 if sub_module.inWorldSpace else 1,
                 'x': Particle.process_min_max_curve(sub_module.x),
                 'y': Particle.process_min_max_curve(sub_module.y),
-                # 'z': Particle.process_min_max_curve(sub_module.z),
-                # 'orbitalX': Particle.process_min_max_curve(sub_module.orbitalX),
-                # 'orbitalY': Particle.process_min_max_curve(sub_module.orbitalY),
+                'z': Particle.process_min_max_curve(sub_module.z),
+                'orbitalX': Particle.process_min_max_curve(sub_module.orbitalX),
+                'orbitalY': Particle.process_min_max_curve(sub_module.orbitalY),
                 'orbitalZ': Particle.process_min_max_curve(sub_module.orbitalZ),
                 'offsetX': Particle.process_min_max_curve(sub_module.orbitalOffsetX),
                 'offsetY': Particle.process_min_max_curve(sub_module.orbitalOffsetY),
-                # 'offsetZ': Particle.process_min_max_curve(sub_module.orbitalOffsetZ),
+                'offsetZ': Particle.process_min_max_curve(sub_module.orbitalOffsetZ),
                 'radial': Particle.process_min_max_curve(sub_module.radial),
                 'speedModifier': Particle.process_min_max_curve(sub_module.speedModifier),
             }
@@ -578,7 +583,7 @@ class Particle(ContainerObject):
                 'separateAxis': sub_module.separateAxis,
                 'curveX': Particle.process_min_max_curve(sub_module.x),
                 'curveY': Particle.process_min_max_curve(sub_module.y),
-                # 'curveZ': Particle.process_min_max_curve(sub_module.z),
+                'curveZ': Particle.process_min_max_curve(sub_module.z),
             }
 
         # 动态材质模块
@@ -645,7 +650,7 @@ class Particle(ContainerObject):
         return data
 
     def process_particle_renderer(self, node):
-        nodes_dict = self.parent_container.nodes_dict
+        nodes_dict = self.parent.nodes_dict
         obj = node.obj
 
         # self.renderers.append(node)
@@ -656,6 +661,15 @@ class Particle(ContainerObject):
             'maxParticleSize': obj.m_MaxParticleSize,
             'flip': util.to_tuple(obj.m_Flip),
             'pivot': util.to_tuple(obj.m_Pivot),
+            'sortingOrder': obj.m_SortingOrder,
+            'sortingLayer': obj.m_SortingLayer,
+            'sortingFudge': obj.m_SortingFudge,
+            'freeFromStretching': obj.m_FreeformStretching,
+            'lengthScale': obj.m_LengthScale,
+            'motionVectors': obj.m_MotionVectors,
+            'rotateWithStretchDirection': obj.m_RotateWithStretchDirection,
+            'cameraVelocityScale': obj.m_CameraVelocityScale,
+            'velocityScale': obj.m_VelocityScale
             # 'meshes': [
             #     obj.m_Mesh,
             #     obj.m_Mesh1,
@@ -669,37 +683,42 @@ class Particle(ContainerObject):
                 obj.m_Mesh.m_PathID)
             if target := nodes_dict.get(iden):
                 meshes.append(target.name)
-                self.meshes.append(target)
+                self.meshes[target.name] = target.obj
         if obj.m_Mesh1.m_PathID > 0:
             iden = (node.dependencies[obj.m_Mesh1.m_FileID - 1] if obj.m_Mesh1.m_FileID != 0 else node.cab) + str(
                 obj.m_Mesh1.m_PathID)
             if target := nodes_dict.get(iden):
                 meshes.append(target.name)
-                self.meshes.append(target)
+                self.meshes[target.name] = target.obj
         if obj.m_Mesh2.m_PathID > 0:
             iden = (node.dependencies[obj.m_Mesh2.m_FileID - 1] if obj.m_Mesh2.m_FileID != 0 else node.cab) + str(
                 obj.m_Mesh2.m_PathID)
             if target := nodes_dict.get(iden):
                 meshes.append(target.name)
-                self.meshes.append(target)
+                self.meshes[target.name] = target.obj
         if obj.m_Mesh3.m_PathID > 0:
             iden = (node.dependencies[obj.m_Mesh3.m_FileID - 1] if obj.m_Mesh3.m_FileID != 0 else node.cab) + str(
                 obj.m_Mesh3.m_PathID)
             if target := nodes_dict.get(iden):
                 meshes.append(target.name)
-                self.meshes.append(target)
+                self.meshes[target.name] = target.obj
 
         item['meshes'] = meshes
 
-        material_main_texs = []
+        # material_main_texs = []
         material_infos = []
         material_tex_infos = []
-        for material in obj.m_Materials:
-            material_info, material_main_tex, material_tex_info, hlsl_info, glsl_info, material_node = self.process_material(node, material.m_FileID, material.m_PathID)
+        renderer_materials = [
+            child for name, child in node.children.items()
+            if name.startswith('m_Materials-')
+        ]
+        for material in renderer_materials:
+            # material_info, material_main_tex, material_tex_info, hlsl_info, glsl_info, material_node = self.process_material(node, material.m_FileID, material.m_PathID)
+            material_info, material_tex_info, hlsl_info, glsl_info, material_node = self.process_material(material)
             if len(material_info) == 0:
                 continue
             material_infos.append(material_info)
-            material_main_texs.extend(material_main_tex)
+            # material_main_texs.extend(material_main_tex)
             material_tex_infos.append(material_tex_info)
             self.textures.extend(material_node)
             # self.hlsls[hlsl_info[0]] = hlsl_info[1]
@@ -710,11 +729,12 @@ class Particle(ContainerObject):
 
         # item['textures'] = texture_nodes
         item['materialInfo'] = material_infos
-        item['materialsMainTex'] = material_main_texs
+        # item['materialsMainTex'] = material_main_texs
         item['texInfo'] = material_tex_infos
 
+        texcoord_stream_infos = []
         if obj.m_UseCustomVertexStreams:
-            texcoord_stream_infos = []
+
             cur = 0
             for stream_index in obj.m_VertexStreams:
                 if stream_index >= 4:
@@ -726,17 +746,19 @@ class Particle(ContainerObject):
                         'size': stream_info[1]
                     })
                     cur += stream_info[1]
-            item['additionalTexcoordInfo'] = texcoord_stream_infos
+        item['additionalTexcoordInfo'] = texcoord_stream_infos
 
         return item
 
     def process(self):
-        game_object_container = self.parent_container.container_objects['GameObject']
+        game_object_container = self.parent.container_objects['GameObject']
+        spine_clip_container = self.parent.container_objects['SpineClips']
         for _, node in self.nodes.items():
             #  先是ParticleSystem
             obj = node.obj
             data = self.process_particle_system(node)
             parent = node.children['m_GameObject']
+            game_object_container.register_game_object(parent)
             for _, _node in parent.children.items():
                 if _node.type == ClassIDType.ParticleSystemRenderer:
                     obj = _node.obj
@@ -745,10 +767,23 @@ class Particle(ContainerObject):
             data['name'] = parent.name
             data['gameObject'] = game_object_container.get_index(parent.get_identification())
             matrix = util.get_transform(parent)
-            translate, rotation, scale = util.decompose_2d_transform(matrix)
-            data['translate'] = translate
+            position, rotation, scale = util.decompose_2d_transform(matrix)
+            data['position'] = position
             data['rotation'] = rotation
             data['scale'] = scale
+            transform_obj = parent.transform.obj
+            data['localPosition'] = util.to_tuple(transform_obj.m_LocalPosition)
+            data['localRotation'] = util.to_tuple(transform_obj.m_LocalRotation)
+            data['localScale'] = util.to_tuple(transform_obj.m_LocalScale)
+
+            spine_parent_transform = parent.transform
+            while spine_parent_transform is not None and not spine_clip_container.is_bone(spine_parent_transform.game_object.name):
+                spine_parent_transform = spine_parent_transform.children.get('m_Father', None)
+
+            if spine_parent_transform is not None:
+                game_object_container.register_game_object(spine_parent_transform.game_object, need_middle_node=False)
+
+
             #  self.data[parent.get_identification()] = data
             self.data.append(data)
             self.data_keys.append(node.get_identification())
@@ -760,9 +795,9 @@ class Particle(ContainerObject):
     def save_data(self, base_path):
         _path = os.path.join(base_path, 'mesh')
         os.makedirs(_path, exist_ok=True)
-        for mesh in self.meshes:
-            with open(os.path.join(_path, mesh.name + '.obj'), 'wt', newline='') as f:
-                f.write(mesh.obj.export())
+        for mesh_name, mesh in self.meshes.items():
+            with open(os.path.join(_path, mesh_name + '.obj'), 'wt', newline='') as f:
+                f.write(mesh.export())
 
         _path = os.path.join(base_path, 'image')
         os.makedirs(_path, exist_ok=True)

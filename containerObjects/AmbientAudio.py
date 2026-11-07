@@ -7,8 +7,8 @@ from containerObjects.ContainerObject import ContainerObject
 
 class AmbientEvent(ContainerObject):
 
-    def __init__(self, parent_container):
-        super().__init__(parent_container)
+    def __init__(self, parent):
+        super().__init__(parent)
         self.audios = []
 
     def process(self):
@@ -30,7 +30,7 @@ class AmbientEvent(ContainerObject):
         return False
 
     def save_data(self, base_path):
-        _path = os.path.join(base_path, 'audio', 'other')
+        _path = os.path.join(base_path, 'audio')
         pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
         for audio in self.audios:
             for name, data in audio.obj.samples.items():

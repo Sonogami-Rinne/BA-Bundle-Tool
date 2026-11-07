@@ -1,11 +1,14 @@
+import copy
 import io
 import math
 import os
 import pathlib
+import shutil
 import struct
 
 import util
 from containerObjects.ContainerObject import ContainerObject
+from excelInfo import db_bgm, db_memory_lobby, base_bgm_path
 from typeId import ClassIDType, inverse_map
 from unityResourceNode import UnityResourceNode
 from linkedList import LinkedList
@@ -20,10 +23,11 @@ class Timeline(ContainerObject):
     def __init__(self, parent):
         super().__init__(parent)
         self.data = {
-            'bgm': '',
+            'bgm': [],
             'animationClip': [],
             'soundFix': [],
-            'spineAnimation': []
+            'spineAnimation': [],
+            'controlTrack': []
         }
         self.nodes = []
         self.game_object_container = None
@@ -32,7 +36,7 @@ class Timeline(ContainerObject):
 
     def _get_hash_dict_(self):
         result = {}
-        nodes = list(self.parent_container.container_objects['GameObject'].nodes.values())
+        nodes = list(self.parent.container_objects['GameObject'].nodes.values())
 
         for node in nodes:
             for i in range(len(node.transform.hierarchy)):
@@ -49,9 +53,7 @@ class Timeline(ContainerObject):
             if name.endswith('key'):
                 flag = True
                 break
-        # if flag:
-        #     util.CLogging.error('Unhandled PlayableDirector struct')
-        #     return {}
+
         # 没有保证是否找到，没有保证是否进入循环，不过会报错的
         if flag:
             name = name.removesuffix('key') + 'value'
@@ -86,38 +88,36 @@ class Timeline(ContainerObject):
         :return: list[{'node','property','isPPtrCurve','curve'}]
         """
         # info_json_manager = self.parent_container.info_json_manager
-        nodes_dict = self.parent_container.nodes_dict
+        nodes_dict = self.parent.nodes_dict
         dependencies = node.dependencies
         generics = generic_bindings.genericBindings
         bindings = []
         hash_dict = self._get_hash_dict(node)
         _node = node
         for item in generics:
-            script = item.script
+            # script = item.script
             data = {}
 
             path_object = hash_dict.get(item.path)
-            # if path_object is None:
-            #     _hash_dict = self._get_hash_dict_()
-            #     path_object = _hash_dict.get(item.path)
 
             _tmp = self.game_object_container.get_index(path_object[1].get_identification()) if path_object else None
             # if _tmp is None:
             #     raise ValueError
             data['gameObject'] = _tmp
-            if _tmp:
-                if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象
-                    file_id = script.m_FileID
-                    iden = (node.cab if file_id == 0 else dependencies[file_id - 1]) + str(path_id)
-                    data['node'] = nodes_dict[iden].obj.object_reader.read_typetree()
-                else:
-                    if item.typeID == ClassIDType.GameObject:
-                        data['node'] = path_object[1].obj.object_reader.read_typetree()
-                    else:
-                        for _node in path_object[1].children.values():
-                            if _node.type == item.typeID:
-                                data['node'] = _node.obj.object_reader.read_typetree()
-                                break
+            if path_object is not None:
+                self.game_object_container.register_game_object(path_object[1])
+                # if (path_id := script.m_PathID) != 0:  # 直接根据pathID, fileID得到对应对象
+                #     file_id = script.m_FileID
+                #     iden = (node.cab if file_id == 0 else dependencies[file_id - 1]) + str(path_id)
+                #     data['node'] = nodes_dict[iden].obj.object_reader.read_typetree()
+                # else:
+                #     if item.typeID == ClassIDType.GameObject:
+                #         data['node'] = path_object[1].obj.object_reader.read_typetree()
+                #     else:
+                #         for _node in path_object[1].children.values():
+                #             if _node.type == item.typeID:
+                #                 data['node'] = _node.obj.object_reader.read_typetree()
+                #                 break
 
             data['isPPtrCurve'] = item.isPPtrCurve != 0
             data['frames'] = []
@@ -125,7 +125,7 @@ class Timeline(ContainerObject):
             tmp = get_property(item.typeID, item.attribute)
             if isinstance(tmp, list):
                 for sub_property in tmp:
-                    sub_item = data.copy()
+                    sub_item = copy.deepcopy(data)
                     sub_item['property'] = sub_property
                     bindings.append(sub_item)
             else:
@@ -207,7 +207,9 @@ class Timeline(ContainerObject):
                         _c0 = curve[i]['data'][0] * delta * delta
                         _c1 = curve[i]['data'][1] * delta
                         in_slope = round(3 * _c0 + 2 * _c1 + curve[i]['data'][2], 2)
-                        if in_slope == .0 and curve[i]['data'][2] == .0:
+                        # Zero endpoint tangents also occur on smooth fades.
+                        # A held/stepped segment has all polynomial terms zero.
+                        if all(coefficient == 0.0 for coefficient in curve[i]['data'][:3]):
                             in_slope = None
                         curve[i + 1]['inSlope'] = in_slope
                         # curve[i + 1]['inSlope'] = round(3 * _c0 + 2 * _c1 + curve[i]['data'][2], 2)
@@ -231,20 +233,25 @@ class Timeline(ContainerObject):
         return generic_bindings
 
     def process(self):
-        self.game_object_container = self.parent_container.container_objects['GameObject']
-        spine_container = self.parent_container.container_objects['SpineClips']
-
-        # if len(self.nodes) != 1:
-        #     util.CLogging.error('Error for unexpected number of timeline objects')
-        # node = self.nodes[0]
-        nodes_dict = self.parent_container.nodes_dict
+        self.game_object_container = self.parent.container_objects['GameObject']
+        spine_container = self.parent.container_objects['SpineClips']
+        added_nodes = set()
+        nodes_dict = self.parent.nodes_dict
+        controls = []
         for node in self.nodes:
             for name, _node in node.children.items():
+                _node_iden = _node.get_identification()
+                if _node_iden in added_nodes:
+                    continue
+                added_nodes.add(_node_iden)
                 if _node.name.startswith('Ani'):  # Animation Track
                     data = {
                         'loop': _node.obj.mInfiniteClipLoop == 1
                     }
-                    animation_clip = _node.children['m_InfiniteClip'].obj  # .obj.read_typetree()  # 假设只有m_InfinityClip
+                    if not (animation_clip := _node.children.get('m_InfiniteClip')):
+                        util.CLogging.warn('Infinity clip missing')
+                        continue
+                    animation_clip = animation_clip.obj  # .obj.read_typetree()  # 假设只有m_InfinityClip
                     # data['genericBindings'] = animation_clip['m_ClipBindingConstant']
                     generic_bindings = self._process_generic_bindings(animation_clip.m_ClipBindingConstant, _node)
 
@@ -323,8 +330,89 @@ class Timeline(ContainerObject):
                             clip_data['spineClip'] = spine_container.get_index(target.get_identification())
                             data.append(clip_data)
 
+            if node.type != ClassIDType.PlayableDirector:
+                continue
+            director_data = node.obj.object_reader.read_typetree()
+            timeline = self._resolve_control_node(node, director_data.get('m_PlayableAsset'))
+            if timeline is None:
+                continue
+            bindings = dict(director_data.get('m_ExposedReferences', {}).get('m_References', []))
+            timeline_data = timeline.obj.object_reader.read_typetree()
+            tracks = [self._resolve_control_node(timeline, pointer)
+                      for pointer in timeline_data.get('m_Tracks', [])]
+            seen_tracks = set()
+            while tracks:
+                track = tracks.pop(0)
+                if track is None or track.get_identification() in seen_tracks:
+                    continue
+                seen_tracks.add(track.get_identification())
+                track_data = track.obj.object_reader.read_typetree()
+                if track_data.get('m_Muted'):
+                    continue
+                tracks.extend(self._resolve_control_node(track, pointer)
+                              for pointer in track_data.get('m_Children', []))
+                for clip in track_data.get('m_Clips', []):
+                    asset = self._resolve_control_node(track, clip.get('m_Asset'))
+                    if asset is None:
+                        continue
+                    asset_data = asset.obj.object_reader.read_typetree()
+                    if 'sourceGameObject' not in asset_data or 'updateParticle' not in asset_data:
+                        continue
+                    source = asset_data['sourceGameObject']
+                    exposed_name = str(source.get('exposedName', ''))
+                    # An explicitly bound null reference overrides defaultValue.
+                    if exposed_name in bindings:
+                        target = self._resolve_control_node(node, bindings[exposed_name])
+                    else:
+                        target = self._resolve_control_node(asset, source.get('defaultValue'))
+                    if target is None:
+                        util.CLogging.warn(f'Control clip target missing: {track.name} / {exposed_name}')
+                        continue
+                    self.game_object_container.register_game_object(target)
+                    game_object = self.game_object_container.get_index(target.get_identification())
+                    if game_object is None:
+                        util.CLogging.warn(f'Control clip target was not exported: {target.name}')
+                        continue
+                    target_data = target.obj.object_reader.read_typetree()
+                    controls.append({
+                        'gameObject': game_object,
+                        'track': track.name,
+                        'start': round(clip.get('m_Start', 0), 6),
+                        'duration': round(clip.get('m_Duration', 0), 6),
+                        'clipIn': clip.get('m_ClipIn', 0),
+                        'timeScale': clip.get('m_TimeScale', 1),
+                        'initialActive': bool(target_data.get('m_IsActive', True)),
+                        'active': bool(asset_data.get('active', True)),
+                        'postPlayback': asset_data.get('postPlayback', 0),
+                        'updateParticle': bool(asset_data.get('updateParticle', True)),
+                        'particleRandomSeed': asset_data.get('particleRandomSeed', 0),
+                        'searchHierarchy': bool(asset_data.get('searchHierarchy', True)),
+                        'updateDirector': bool(asset_data.get('updateDirector', True)),
+                        'updateITimeControl': bool(asset_data.get('updateITimeControl', True)),
+                        'directorOnClipEnd': asset_data.get('directorOnClipEnd', 0),
+                    })
+        self.data['controlTrack'] = sorted(controls, key=lambda clip: clip['start'])
+        # self._process_control_tracks()
+
+    def _resolve_control_node(self, owner, pointer):
+        if not pointer or not pointer.get('m_PathID'):
+            return None
+        file_id = pointer.get('m_FileID', 0)
+        cab = owner.cab if file_id == 0 else owner.dependencies[file_id - 1]
+        return self.parent.nodes_dict.get(cab + str(pointer['m_PathID']))
+
+    def _process_control_tracks(self):
+        # ExposedReference bindings belong to the Director, not the Timeline
+        # asset. The same Timeline can be used with different scene objects.
+        controls = []
+        seen_directors = set()
+        for director in self.nodes:
+            if director.type != ClassIDType.PlayableDirector:
+                continue
+
+
     def test_and_add(self, node):
-        if node.name.endswith('_Timeline'):
+        if node.name.endswith('_Timeline') or node.type == ClassIDType.PlayableDirector:
             self.nodes.append(node)
             return True
         return False
@@ -335,19 +423,19 @@ class Timeline(ContainerObject):
         self.data = {
             'animationClip': [],
             'soundFix': [],
-            'spineAnimation': []
+            'spineAnimation': [],
+            'controlTrack': [],
+            'bgm': []
         }
         self.textures.clear()
 
     def save_data(self, base_path):
-        _path = os.path.join(base_path, 'audio', 'other')
-        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
+        audio_path = os.path.join(base_path, 'audio')
+        pathlib.Path(audio_path).mkdir(parents=True, exist_ok=True)
         for audio in self.audios:
             for name, data in audio.obj.samples.items():
-                with open(os.path.join(_path, name), 'wb+') as f:
+                with open(os.path.join(audio_path, name), 'wb+') as f:
                     f.write(data)
-        _path = os.path.join(base_path, 'audio', 'voice')
-        pathlib.Path(_path).mkdir(parents=True, exist_ok=True)
 
         _path = os.path.join(base_path, 'image')
         pathlib.Path(_path).mkdir(exist_ok=True, parents=True)
@@ -357,8 +445,13 @@ class Timeline(ContainerObject):
             save_name = texture.name + '.png' if not texture.name.endswith('.png') else texture.name
             obj.image.save(os.path.join(_path, save_name))
 
+        if chr_info := db_memory_lobby.get(self.parent.prefab.lower()):
+            bgm = db_bgm[chr_info['bgm']]
+            self.data['bgm'] = bgm
+            for bgm_name in bgm['path']:
+                for base_bgm_pa in base_bgm_path:
+                    bgm_path = os.path.join(base_bgm_pa, bgm_name)
+                    if os.path.exists(bgm_path):
+                        shutil.copy(bgm_path, os.path.join(audio_path, bgm_name))
+                        break
         super().save_data(base_path)
-
-        # for name, data in audio_obj.samples.items():
-        #     with open(os.path.join(base_path, 'ambient-' + name), 'wb+') as f:
-        #         f.write(data)

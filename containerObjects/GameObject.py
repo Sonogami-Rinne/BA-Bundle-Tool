@@ -1,14 +1,15 @@
-import json
-import os
-import pathlib
+import numpy as np
 
 import util
 from containerObjects.ContainerObject import ContainerObject
 from typeId import ClassIDType
-from linkedList import LinkedList
 
 
 class GameObject(ContainerObject):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.game_objects = {}
+        self.registered = {}
 
     def test_and_add(self, node):
         if node.type == ClassIDType.GameObject:
@@ -18,32 +19,81 @@ class GameObject(ContainerObject):
 
     def process(self):
         self.data_keys = list(self.nodes.keys())
-        self.data = {
-            i: '' for i in self.data_keys
-        }
-        root = next(iter(self.nodes.values()))
-        linked_list = LinkedList(root.transform)
-        linked_list.head.data.hierarchy = ()
+        self.data = {}
+        for identification, node in self.nodes.items():
+            names = [node.name]
+            # seen = {identification}
+            transform = node.transform
+            while parent_transform := transform.children.get('m_Father'):
+                parent = parent_transform.game_object
+                if parent is None:
+                    break
+                parent_id = parent.get_identification()
+                if parent_id not in self.nodes:
+                    break
+                # if parent_id in seen:
+                #     raise ValueError(f'Cycle in GameObject hierarchy: {identification}')
+                names.append(parent.name)
+                # seen.add(parent_id)
+                transform = parent_transform
 
-        while linked_list.head:
-            for node in linked_list.walk_through():
-                node.hierarchy += (node.game_object.name,)
-                # matrix = util.get_transform(node.game_object)
-                # translate, rotation, scale = util.decompose_2d_transform(matrix)
-                # self.data[node.game_object.get_identification()] = ('/'.join(node.hierarchy), translate, rotation, scale)
-                self.data[node.game_object.get_identification()] = '/'.join(node.hierarchy)
-                # self.data.append('/'.join(node.hierarchy))
-                to_adds = []
-                for _name, _node in node.children.items():
-                    if _name.startswith('m_Children'):
-                        _node.hierarchy = node.hierarchy
-                        to_adds.append(_node)
-                node.hierarchy_children = to_adds
-                linked_list.adds(node.hierarchy_children)
+            node.transform.hierarchy = tuple(reversed(names))
+            node.transform.hierarchy_children = [
+                child for name, child in node.transform.children.items()
+                if name.startswith('m_Children')
+            ]
+
+            self.game_objects[identification] = '/'.join(node.transform.hierarchy)
+
+    def register_game_object(self, node, need_middle_node=True):
+        iden = node.get_identification()
+        need_middle_node = need_middle_node or self.registered.get(iden, False)
+        self.registered[iden] = need_middle_node
+
+    def clear(self):
+        self.game_objects.clear()
+        self.registered.clear()
+        super().clear()
+
+    def get_game_object_path(self, iden):
+        return self.game_objects[iden]
 
     def save_data(self, base_path):
-        base_path.mkdir(parents=True, exist_ok=True)
-        with open(os.path.join(base_path, self.__class__.__name__ + '.json'), 'w+', encoding='utf-8') as f:
-            json.dump(list(self.data.values()), f, indent=2)
+        def dfs(ancestor, node, could_active):
+            game_object = node.game_object
 
-        self.clear()
+            new_ancestor = ancestor
+            if (iden := game_object.get_identification()) in self.registered:
+                info = {
+                    'name': game_object.name,
+                    'hierarchy': '/'.join(game_object.transform.hierarchy),
+                    'active': game_object.obj.m_IsActive,
+                    'couldActive': could_active
+                }
+                if ancestor is None or node.children['m_Father'] == ancestor or not self.registered[iden]:
+                    info['transformToParent'] = None
+                    info['parent'] = -1 if ancestor is None else self.get_index(ancestor.game_object.get_identification())
+                else:
+                    parent_matrix = util.get_transform(node.children['m_Father'].game_object)
+                    ancestor_matrix = util.get_transform(ancestor.game_object)
+                    relative = np.linalg.inv(ancestor_matrix) @ parent_matrix
+                    info['parent'] = self.get_index(ancestor.game_object.get_identification())
+                    info['transformToParent'] = relative.tolist()
+                transform = node.obj
+                info['matrix'] = util.get_transform(game_object).tolist()
+                info['localPosition'] = util.to_tuple(transform.m_LocalPosition)
+                info['localRotation'] = util.to_tuple(transform.m_LocalRotation)
+                info['localScale'] = util.to_tuple(transform.m_LocalScale)
+                self.data[self.get_index(iden)] = info
+                new_ancestor = node
+            else:
+                if not game_object.obj.m_IsActive:
+                    could_active = False
+            for child in node.hierarchy_children:
+                dfs(new_ancestor, child, could_active)
+
+        for _node in self.nodes.values():
+            if len(_node.transform.hierarchy) == 1:
+                dfs(None, _node.transform, True)
+
+        super().save_data(base_path)

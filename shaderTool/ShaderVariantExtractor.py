@@ -60,6 +60,7 @@ def extract_variant(shader_content, enabled_keywords):
                     cur_matched += 1
             if cur_matched > max_matched_count:
                 max_matched_index = index
+                max_matched_count = cur_matched
         variant_index.append(max_matched_index)
         max_matched_parts_length = variants[max_matched_index]['end'] - variants[max_matched_index]['begin']
         del variants[max_matched_index]
@@ -79,12 +80,12 @@ else:
     CLogging.error('shadermap.json not found')
 
 
-def get_variant_shader_data(valid_keywords, invalid_keywords, shader_name):
+def get_variant_shader_data(valid_keywords, invalid_keywords, shader_name, first_variant=False):
     info = shader_info.get(shader_name)
     if info is None:
         CLogging.error('Unrecorded shader: ' + shader_name)
         return None
-    variant_keywords = set([i for keyword_index, i in enumerate(info['keywords']) if info['enableFlag'] == 1])
+    variant_keywords = set([i for keyword_index, i in enumerate(info['keywords']) if info['enableFlag'][keyword_index] == 1])
     original_keywords = set(info['keywords'])
     for i in valid_keywords:
         if i in original_keywords:
@@ -100,6 +101,10 @@ def get_variant_shader_data(valid_keywords, invalid_keywords, shader_name):
 
     with open(file_path, 'r', encoding='utf-8') as f:
         shader_content = f.read()
-    hlsl, varient_index = extract_variant(shader_content, variant_keywords)
+    # Spine materials use the first recorded variant of each shader stage.
+    selected_keywords = [] if first_variant else [
+        keyword for keyword in info['keywords'] if keyword in variant_keywords
+    ]
+    hlsl, _ = extract_variant(shader_content, set(selected_keywords))
 
-    return hlsl, copy.deepcopy(info['properties']), varient_index
+    return hlsl, copy.deepcopy(info['properties']), selected_keywords, copy.deepcopy(info['blendMode']), info['renderQueue']

@@ -9,8 +9,8 @@ from util import to_tuple
 class InteractionConfig(ContainerObject):
 
     def fetch_data(self, item):
-        spine_container = self.parent_container.container_objects['SpineClips']
-        game_object_container = self.parent_container.container_objects['GameObject']
+        spine_container = self.parent.container_objects['SpineClips']
+        game_object_container = self.parent.container_objects['GameObject']
         obj = item.obj
         bone = item.children['Bone'].game_object
         # bone_transform = util.get_transform(bone)
@@ -23,14 +23,14 @@ class InteractionConfig(ContainerObject):
             # 'initPos': (obj.OrigLocalPos.x, obj.OrigLocalPos.y),
             'delay': obj.TriggerDelay,
             'bounds': {
-                'minLocalX': round(obj.MinLocalPos.y, 4),
-                'minLocalY': round(obj.MinLocalPos.x, 4),
-                'maxLocalX': round(obj.MaxLocalPos.y, 4),
-                'maxLocalY': round(obj.MaxLocalPos.x, 4),
+                'minLocalX': round(obj.MinLocalPos.x, 4),
+                'minLocalY': round(-obj.MaxLocalPos.y, 4),
+                'maxLocalX': round(obj.MaxLocalPos.x, 4),
+                'maxLocalY': round(-obj.MinLocalPos.y, 4),
             },
             'initPos': {
-                'x': round(obj.OrigLocalPos.y, 4),
-                'y': round(obj.OrigLocalPos.x, 4),
+                'x': round(obj.OrigLocalPos.x, 4),
+                'y': round(-obj.OrigLocalPos.y, 4),
             },
             'bone': {
                 'name': bone.name,
@@ -53,7 +53,7 @@ class InteractionConfig(ContainerObject):
         return result
 
     def process(self):
-        game_object_container = self.parent_container.container_objects['GameObject']
+        game_object_container = self.parent.container_objects['GameObject']
 
         for identification, node in self.nodes.items():
             node_data = {}
@@ -68,7 +68,7 @@ class InteractionConfig(ContainerObject):
                     #m_Size, m_Center
                     node_data['collider'] = {
                         'X': obj.m_Center.x + translate[0],
-                        'Y': obj.m_Center.y + translate[1],
+                        'Y': translate[1] - obj.m_Center.y,
                         'scaleX': scale[0],
                         'scaleY': scale[1],
                         'halfWidth': obj.m_Size.x / 2,
@@ -83,6 +83,7 @@ class InteractionConfig(ContainerObject):
 
             # 对于timeline里面对属性的修改，没办法保证是哪个的enable或者active,只能手动重定向了,因此先记录这个gameObject
             node_data['gameObject'] = game_object_container.get_index(node.get_identification())
+            # game_object_container.register_game_object(node)
             self.data_keys.append(identification)
             self.data.append(node_data)
 

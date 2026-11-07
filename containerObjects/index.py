@@ -6,6 +6,7 @@ import util
 from containerObjects.AmbientAudio import AmbientEvent
 from containerObjects.GameObject import GameObject
 from containerObjects.InteractionConfig import InteractionConfig
+from containerObjects.MeshRender import MeshRender
 from containerObjects.Particle import Particle
 from containerObjects.PostProcessing import PostProcessing
 from containerObjects.SpineClips import SpineClips
@@ -24,11 +25,13 @@ class Container:
             'SpriteRender': SpriteRender(self),
             'Particle': Particle(self),
             'Timeline': Timeline(self),
-            # 'AmbientEvent': AmbientEvent(self),
+            'AmbientEvent': AmbientEvent(self),
+            'MeshRender': MeshRender(self),
             'ResourceJS': ResourceJS(self),
         } if util.CONTAINER_RECORD else {}
         self.info_json_manager: infoJsonManager.InfoJsonManger = info_json_manager
         self.nodes_dict = nodes_dict
+        self.prefab = None
 
     def notify_single(self, node):  # process
         for i in self.container_objects.values():
@@ -47,4 +50,7 @@ class Container:
 
     def notify_total(self):
         return
+
+    def set_prefab_name(self, prefab):
+        self.prefab = prefab
 

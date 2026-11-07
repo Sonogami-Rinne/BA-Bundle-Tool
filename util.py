@@ -1,6 +1,5 @@
 import math
 import os.path
-import typing
 import zlib
 
 import UnityPy
@@ -18,7 +17,7 @@ MAX_BUFFER_LENGTH = 100
 缓冲区最大文件数目
 """
 
-BUNDLES_PATH = r"E:\BlueArchive\YostarGames\BlueArchive_JP\BlueArchive_Data\StreamingAssets\AssetBundles"
+BUNDLES_PATH = r"E:\D\Program\YostarGames\BlueArchive_JP\BlueArchive_Data\StreamingAssets\AssetBundles"
 """
 bundle文件目录
 """
@@ -117,21 +116,23 @@ def compute_unity_hash(s: str) -> int:
     """
     return zlib.crc32(s.encode('utf-8')) & 0xFFFFFFFF
 
-
 def to_tuple(obj):
     """
     转化为元组
     :param obj:
     :return:
     """
-    if hasattr(obj, 'x'):
-        if hasattr(obj, 'w'):
-            return obj.x, obj.y, obj.z, obj.w
-        return obj.x, obj.y, obj.z
-    elif hasattr(obj, 'r'):
-        if hasattr(obj, 'a'):
-            return obj.r, obj.g, obj.b, obj.a
-        return obj.r, obj.g, obj.b
+    result = []
+    if pa := getattr(obj, 'x', None):
+        result.append(pa)
+        for para in ('y', 'z', 'w', 'width', 'height'):
+            if pa := getattr(obj, para, None):
+                result.append(pa)
+    else:
+        for para in ('r', 'g', 'b', 'a'):
+            if pa := getattr(obj, para, None):
+                result.append(pa)
+    return tuple(result)
 
 
 def compose_transform_matrix(translation, quaternion, scale):
@@ -163,12 +164,15 @@ def compose_transform_matrix(translation, quaternion, scale):
 
 def decompose_2d_transform(matrix_4x4):
     """
-    从 4x4 变换矩阵提取 2D 变换参数（忽略 z 轴）
+    从 Unity 4x4 变换矩阵提取 Pixi 变换参数
+
+    Unity 的 Y 轴方向与 Pixi 相反，因此输出时对 Y 位置做镜像。镜像会改变
+    二维旋转的正方向，所以旋转角也同时取反。
     :param matrix_4x4: 4x4 变换矩阵（3D 齐次坐标）
-    :return: (tx, ty), theta, (sx, sy)
+    :return: (tx, ty, tz), theta, (sx, sy)
     """
     # 提取 2D 平移
-    tx, ty = matrix_4x4[0, 3], matrix_4x4[1, 3]
+    tx, ty, tz = matrix_4x4[0, 3], matrix_4x4[1, 3], matrix_4x4[2, 3]
 
     # 提取 2D 旋转角度 θ（弧度）
     theta = np.arctan2(matrix_4x4[1, 0], matrix_4x4[0, 0])
@@ -177,7 +181,7 @@ def decompose_2d_transform(matrix_4x4):
     sx = np.sqrt(matrix_4x4[0, 0] ** 2 + matrix_4x4[1, 0] ** 2)
     sy = np.sqrt(matrix_4x4[0, 1] ** 2 + matrix_4x4[1, 1] ** 2)
 
-    return (round(tx, 2), round(ty, 2)), round(theta, 4), (round(sx, 2), round(sy, 2))
+    return (round(tx, 2), round(ty, 2), round(tz, 2)), round(theta, 4), (round(sx, 2), round(sy, 2))
 
 def euler_to_quaternion(li: tuple[float, float, float]):
     cz = math.cos(li[0] * 0.5)

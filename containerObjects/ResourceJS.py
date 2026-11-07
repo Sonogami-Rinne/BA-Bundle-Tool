@@ -14,11 +14,11 @@ class ResourceJS(ContainerObject):
             f.write('const resourceLoader = {\n')
             for file in os.listdir(base_path):
                 if file.endswith('.skel'):
-                    f.write(f'"{file}": () => import("@assets/{file}?binary"),\n')
+                    f.write(f'"{file}": () => import("@assets/{file}?url"),\n')
                 elif file.endswith('.atlas'):
                     f.write(f'"{file}": () => import("@assets/{file}?raw"),\n')
             for file in os.listdir(os.path.join(base_path, 'image')):
-                f.write(f'"{file}": () => import("@image/{file}?binary"),\n')
+                f.write(f'"{file}": () => import("@image/{file}?url"),\n')
             for folder in os.listdir(os.path.join(base_path, 'shader')):
                 folder_path = os.path.join(base_path, 'shader', folder)
                 for file in pathlib.Path(folder_path).rglob('*.vert'):
@@ -26,5 +26,6 @@ class ResourceJS(ContainerObject):
                     file_name = file_name[:file_name.rindex('.')]
                     f.write(f'"{folder}/{file_name}.vert": () => import("@shader/{folder}/{file_name}.vert?raw"),\n')
                     f.write(f'"{folder}/{file_name}.frag": () => import("@shader/{folder}/{file_name}.frag?raw"),\n')
-
+            for file in os.listdir(os.path.join(base_path, 'audio')):
+                f.write(f'"{file}": () => import("@audio/{file}?url"),\n')
             f.write('}\nexport default resourceLoader;')

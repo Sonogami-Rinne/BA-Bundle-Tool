@@ -2,12 +2,16 @@ import os
 import pathlib
 import shutil
 import struct
+import subprocess
 import sys
 import io
+import zlib
 from UnityPy.enums import ShaderGpuProgramType
 
+import util
 
-def blob_reader(buffers):
+
+def blob_reader(buffers, decompile=True):
     data = {}
     save_path = 'exported'
     os.makedirs(save_path, exist_ok=True)
@@ -37,7 +41,7 @@ def blob_reader(buffers):
         version, block_type = struct.unpack('<2i', buffer[pointer:pointer + 8])
         pointer += 8
 
-        if 0 < block_type <= 8:
+        if 0 < block_type <= 14:
             pointer += 16
 
             constant_buffer_infos = []
@@ -183,7 +187,9 @@ def blob_reader(buffers):
                         'properties': (un_property1, un_property2),
                         'type': 'Texture2D<float4>' if un_property2 == 4 else 'float4'
                     })
-                    assert un_property2 == 4
+                    # assert un_property2 == 4
+                    if un_property2 != 4:
+                        util.CLogging.warn(f'Global variable but not Texture2D<float4> founded, value: {un_property2}')
                 else:
                     # un_property0, un_property1 = struct.unpack('<ii', buffer[pointer:pointer+8])
                     pointer += 8
@@ -218,15 +224,40 @@ def blob_reader(buffers):
             pointer += 34
             dxbc_length = struct.unpack('<i', buffer[pointer + 24:pointer + 28])[0]
             dxbc_content = buffer[pointer:pointer + dxbc_length]
+            block_info['dxbcCrc32'] = zlib.crc32(dxbc_content) & 0xFFFFFFFF
             block_info['after_dxbc'] = buffer[pointer + dxbc_length:end_poi]
 
-            bin_file_name = os.path.join(save_path, '1.bin')
-            hlsl_file_name = os.path.join(save_path, '1.hlsl')
-            with open(bin_file_name, 'wb+') as f:
-                f.write(dxbc_content)
-            os.system(rf'.\shaderTool\tools\cmd_Decompiler.exe -D .\{bin_file_name}')
-            with open(hlsl_file_name, 'r') as f:
-                block_info['hlsl_content'] = f.read()
+            if decompile:
+                bin_file_name = os.path.join(save_path, '1.bin')
+                hlsl_file_name = os.path.join(save_path, '1.hlsl')
+                with open(bin_file_name, 'wb+') as f:
+                    f.write(dxbc_content)
+                if os.path.isfile(hlsl_file_name):
+                    os.remove(hlsl_file_name)
+                try:
+                    result = subprocess.run(
+                        [r'.\shaderTool\tools\cmd_Decompiler.exe', '-D', bin_file_name],
+                        capture_output=True,
+                    )
+                except OSError as exc:
+                    util.CLogging.error(f'3Dmigoto反编译器启动失败: {exc}')
+                    raise
+                if result.returncode != 0:
+                    output = (result.stdout + result.stderr).decode(errors='replace').strip()
+                    util.CLogging.error(
+                        f'3Dmigoto反编译失败 (exit code {result.returncode})'
+                        + (f'\n{output}' if output else '')
+                    )
+                    raise RuntimeError(f'3Dmigoto反编译失败: {bin_file_name}')
+                if not os.path.isfile(hlsl_file_name):
+                    output = (result.stdout + result.stderr).decode(errors='replace').strip()
+                    util.CLogging.error(
+                        '3Dmigoto反编译未生成HLSL文件'
+                        + (f'\n{output}' if output else '')
+                    )
+                    raise RuntimeError(f'3Dmigoto反编译未生成文件: {hlsl_file_name}')
+                with open(hlsl_file_name, 'r') as f:
+                    block_info['hlsl_content'] = f.read()
         else:
             assert False
     shutil.rmtree(save_path)

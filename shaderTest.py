@@ -6,7 +6,9 @@ from shaderTool.ShaderConverter import export_shader
 from shaderTool.ShaderInfoCombiner import combine_info
 from util import better_print
 
-file = r'C:\Users\Administrator\Desktop\assets-_mx-shaders-_mxdependency-shaders-2025-07-02_assets_all_2493779052.bundle'
+# file = r'C:\Users\Administrator\Desktop\assets-_mx-shaders-_mxdependency-shaders-2025-07-02_assets_all_2493779052.bundle'
+# file = r'C:\Users\Administrator\Desktop\globalgamemanagers.assets'
+file = r'E:\D\Program\YostarGames\BlueArchive_JP\BlueArchive_Data\globalgamemanagers.assets'
 # file = r'C:\Users\Administrator\Desktop\prologdepengroup-assets-_mx-shaders-_mxprolog-2025-07-02_assets_all_1537986602.bundle'
 # file = r'prologdepengroup-assets-_mx-shaders-_mxprolog-2025-07-02_assets_all_1537986602.bundle'
 env = UnityPy.load(file)
@@ -20,7 +22,7 @@ for obj in env.objects:
         data = obj.parse_as_object()
         data1 = obj.parse_as_dict()
         shader_name = data1['m_ParsedForm']['m_Name']
-        if shader_name != 'DSFX/FX_SHADER_AlphaBlend_Add_Distort_1a':
+        if shader_name != 'Hidden/MXFinalBloom':
             continue
         compressed_blob = bytes(data1['compressedBlob'])
         platform_index = data1['platforms'].index(4)
