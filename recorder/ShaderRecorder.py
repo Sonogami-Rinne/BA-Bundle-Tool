@@ -10,6 +10,7 @@ from util import ClassIDType, CLogging, better_print, compute_unity_hash
 from UnityPy.helpers import CompressionHelper
 from shaderTool.ShaderConverter import export_shader, ConvertSerializedPropertyToDict
 from shaderTool.ShaderInfoCombiner import combine_info
+from shaderTool.RenderState import extract_blend_info
 
 render_queue_map = {
     'Background': 1000,
@@ -23,7 +24,7 @@ render_queue_reg = r'([a-zA-Z]+)([+/-]?[0-9]*)'
 class ShaderRecorder(BaseRecorder):
     def __init__(self):
         super().__init__()
-        save_file = f'.\\save\\recorder\\{ShaderRecorder.__class__.__name__}\\shadermap.json'
+        save_file = pathlib.Path('save') / 'recorder' / type(self).__name__ / 'shadermap.json'
         if pathlib.Path(save_file).exists():
             with open(save_file, 'r') as f:
                 self.batch_data = json.load(f)
@@ -73,15 +74,7 @@ class ShaderRecorder(BaseRecorder):
                 if shader_blend_mode is None or state['m_Name'] == 'Forward':
                     rt = state['rtBlend0']
                     forward_flag = state['m_Name'] == 'Forward'
-                    shader_blend_mode = {
-                        'srcBlend': rt['srcBlend']['val'],
-                        'dstBlend': rt['destBlend']['val'],
-                        'srcBlendAlpha': rt['srcBlendAlpha']['val'],
-                        'dstBlendAlpha': rt['destBlendAlpha']['val'],
-                        'blendOp': rt['blendOp']['val'],
-                        'blendOpAlpha': rt['blendOpAlpha']['val'],
-                        'colMask': rt['colMask']['val']
-                    }
+                    shader_blend_mode = extract_blend_info(rt)
                 if forward_flag:
                     break
 

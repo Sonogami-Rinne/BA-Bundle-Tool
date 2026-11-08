@@ -655,6 +655,11 @@ class Particle(ContainerObject):
 
         # self.renderers.append(node)
         item = {
+            'enabled': bool(getattr(obj, 'm_Enabled', True)),
+            'applyActiveColorSpace': bool(getattr(obj, 'm_ApplyActiveColorSpace', True)),
+            'renderAlignment': getattr(obj, 'm_RenderAlignment', 0),
+            'sortMode': getattr(obj, 'm_SortMode', 0),
+            'allowRoll': bool(getattr(obj, 'm_AllowRoll', True)),
             'renderMode': obj.m_RenderMode,  # BillBoard, Stretch, HorizontalBillBoard, VerticalBillBoard, Mesh, None
             # 'materials': obj.m_Materials,
             'minParticleSize': obj.m_MinParticleSize,
@@ -678,25 +683,25 @@ class Particle(ContainerObject):
             # ]
         }
         meshes = []
-        if obj.m_Mesh.m_PathID > 0:
+        if obj.m_Mesh.m_PathID != 0:
             iden = (node.dependencies[obj.m_Mesh.m_FileID - 1] if obj.m_Mesh.m_FileID != 0 else node.cab) + str(
                 obj.m_Mesh.m_PathID)
             if target := nodes_dict.get(iden):
                 meshes.append(target.name)
                 self.meshes[target.name] = target.obj
-        if obj.m_Mesh1.m_PathID > 0:
+        if obj.m_Mesh1.m_PathID != 0:
             iden = (node.dependencies[obj.m_Mesh1.m_FileID - 1] if obj.m_Mesh1.m_FileID != 0 else node.cab) + str(
                 obj.m_Mesh1.m_PathID)
             if target := nodes_dict.get(iden):
                 meshes.append(target.name)
                 self.meshes[target.name] = target.obj
-        if obj.m_Mesh2.m_PathID > 0:
+        if obj.m_Mesh2.m_PathID != 0:
             iden = (node.dependencies[obj.m_Mesh2.m_FileID - 1] if obj.m_Mesh2.m_FileID != 0 else node.cab) + str(
                 obj.m_Mesh2.m_PathID)
             if target := nodes_dict.get(iden):
                 meshes.append(target.name)
                 self.meshes[target.name] = target.obj
-        if obj.m_Mesh3.m_PathID > 0:
+        if obj.m_Mesh3.m_PathID != 0:
             iden = (node.dependencies[obj.m_Mesh3.m_FileID - 1] if obj.m_Mesh3.m_FileID != 0 else node.cab) + str(
                 obj.m_Mesh3.m_PathID)
             if target := nodes_dict.get(iden):

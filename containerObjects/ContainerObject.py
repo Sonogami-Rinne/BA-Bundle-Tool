@@ -7,6 +7,7 @@ from CJSONEncoder import CJSONEncoder
 from shaderTool.ShaderVariantExtractor import get_variant_shader_data
 from util import CLogging
 from parsedShaderMap import get_parsed_shader
+from shaderTool.RenderState import resolve_blend_info
 
 
 class ContainerObject:
@@ -121,7 +122,7 @@ class ContainerObject:
                 if (tar := mat_properties.get(k, None)) is not None:
                     v['value'] = tar
             material_info['properties'] = properties
-            material_info['blendInfo'] = blend_info
+            material_info['blendInfo'] = resolve_blend_info(blend_info, properties, mat_properties)
 
         # return material_info, material_main_tex, material_tex_infos, hlsl_tuple, glsl_tuple, material_tex_nodes
         return material_info, material_tex_infos, hlsl_tuple, glsl_tuple, material_tex_nodes
