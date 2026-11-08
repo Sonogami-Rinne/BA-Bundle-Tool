@@ -123,14 +123,14 @@ def to_tuple(obj):
     :return:
     """
     result = []
-    if pa := getattr(obj, 'x', None) is not None:
+    if (pa := getattr(obj, 'x', None)) is not None:
         result.append(pa)
         for para in ('y', 'z', 'w', 'width', 'height'):
-            if pa := getattr(obj, para, None) is not None:
+            if (pa := getattr(obj, para, None)) is not None:
                 result.append(pa)
     else:
         for para in ('r', 'g', 'b', 'a'):
-            if pa := getattr(obj, para, None) is not None:
+            if (pa := getattr(obj, para, None)) is not None:
                 result.append(pa)
     return tuple(result)
 
